@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://kabutoxyz.com/</loc></url>
+  <url><loc>https://kabutoxyz.com/articles/</loc></url>
+  <url><loc>https://kabutoxyz.com/about/</loc></url>
+  <url><loc>https://kabutoxyz.com/contact/</loc></url>
+  <url><loc>https://kabutoxyz.com/privacy/</loc></url>
+  <url><loc>https://kabutoxyz.com/terms/</loc></url>
+  <url><loc>https://kabutoxyz.com/articles/file-descriptor-leak/</loc></url>
+  <url><loc>https://kabutoxyz.com/articles/ssh-host-key-fingerprints/</loc></url>
+  <url><loc>https://kabutoxyz.com/articles/systemd-restart-policy-crash-loop/</loc></url>
+  <url><loc>https://kabutoxyz.com/articles/rsync-backup-flags/</loc></url>
+  <url><loc>https://kabutoxyz.com/articles/disk-full-incident-order/</loc></url>
+  <url><loc>https://kabutoxyz.com/articles/test-remote-port-reachability/</loc></url>
+  <url><loc>https://kabutoxyz.com/articles/find-process-holding-port/</loc></url>
+  <url><loc>https://kabutoxyz.com/articles/honest-health-checks/</loc></url>
+  <url><loc>https://kabutoxyz.com/articles/container-volumes-data-survival/</loc></url>
+  <url><loc>https://kabutoxyz.com/articles/backup-restore-drill/</loc></url>
+  <url><loc>https://kabutoxyz.com/articles/systemd-timer-calendar-expressions/</loc></url>
+  <url><loc>https://kabutoxyz.com/articles/var-log-disk-growth/</loc></url>
+</urlset>

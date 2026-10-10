@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reading a disk-full incident in the right order</title>
+<meta name="description" content="Space is used, not created. Work from df to du to inodes to open files and the cause is found in minutes instead of an hour.">
+<link rel="canonical" href="https://kabutoxyz.com/articles/disk-full-incident-order/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Reading a disk-full incident in the right order">
+<meta property="og:description" content="Space is used, not created. Work from df to du to inodes to open files and the cause is found in minutes instead of an hour.">
+<meta property="og:url" content="https://kabutoxyz.com/articles/disk-full-incident-order/">
+<meta property="og:site_name" content="Ops Journal">
+<meta name="twitter:card" content="summary">
+<link rel="alternate" type="application/rss+xml" title="Ops Journal" href="https://kabutoxyz.com/feed.xml">
+<style>
+:root{
+  --bg:#fbfaf7; --panel:#ffffff; --ink:#1c1a17; --muted:#6b6459;
+  --line:#e5e0d6; --accent:#1f5f4b; --accent-soft:#eaf3ef;
+  --code-bg:#f4f1ea; --radius:10px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);
+  font-size:17px;line-height:1.65;
+}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-soft)}
+a:hover{border-bottom-color:var(--accent)}
+.wrap{max-width:760px;margin:0 auto;padding:0 20px}
+header.site{border-bottom:1px solid var(--line);background:var(--panel)}
+header.site .wrap{display:flex;align-items:baseline;justify-content:space-between;
+  gap:16px;padding-top:18px;padding-bottom:18px;flex-wrap:wrap}
+.brand{font-weight:700;font-size:1.05rem;letter-spacing:-.01em;border:none}
+.brand span{color:var(--muted);font-weight:400}
+nav.links a{margin-left:18px;font-size:.94rem;border:none;color:var(--muted)}
+nav.links a:hover{color:var(--accent)}
+main{padding:40px 0 64px}
+h1{font-size:1.85rem;line-height:1.25;letter-spacing:-.02em;margin:0 0 .5rem}
+h2{font-size:1.3rem;margin:2.2rem 0 .6rem;letter-spacing:-.01em}
+h3{font-size:1.08rem;margin:1.7rem 0 .4rem}
+p{margin:0 0 1.05rem}
+ul,ol{margin:0 0 1.05rem;padding-left:1.3rem}
+li{margin-bottom:.4rem}
+hr{border:none;border-top:1px solid var(--line);margin:2.4rem 0}
+blockquote{margin:1.4rem 0;padding:.2rem 0 .2rem 1rem;
+  border-left:3px solid var(--accent-soft);color:var(--muted)}
+code{font-family:var(--mono);font-size:.87em;background:var(--code-bg);
+  padding:.12em .38em;border-radius:5px}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px 16px;overflow-x:auto;margin:0 0 1.2rem}
+pre code{background:none;padding:0;font-size:.84rem;line-height:1.55}
+table{width:100%;border-collapse:collapse;margin:0 0 1.2rem;font-size:.94rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font-weight:600;background:var(--panel)}
+.meta{color:var(--muted);font-size:.9rem;margin-bottom:1.8rem}
+.lede{font-size:1.08rem;color:var(--muted);margin-bottom:2rem}
+.cards{list-style:none;padding:0;margin:0}
+.cards li{border-top:1px solid var(--line);padding:18px 0;margin:0}
+.cards li:first-child{border-top:none}
+.cards h3{margin:0 0 .3rem;font-size:1.12rem}
+.cards p{margin:0;color:var(--muted);font-size:.95rem}
+.related{margin-top:3rem;padding-top:1.6rem;border-top:1px solid var(--line)}
+.related h2{margin-top:0}
+.related .cards h3{font-size:1.02rem}
+.ad-slot{margin:2.4rem 0;min-height:1px}
+footer.site{border-top:1px solid var(--line);color:var(--muted);font-size:.88rem;
+  background:var(--panel)}
+footer.site .wrap{padding-top:24px;padding-bottom:28px;display:flex;
+  justify-content:space-between;gap:14px;flex-wrap:wrap}
+footer.site a{color:var(--muted);border:none}
+footer.site a:hover{color:var(--accent)}
+@media(max-width:600px){
+  body{font-size:16px}
+  h1{font-size:1.55rem}
+  nav.links a{margin-left:0;margin-right:16px}
+}
+</style>
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebSite", "@id": "https://kabutoxyz.com/#website", "url": "https://kabutoxyz.com/", "name": "Ops Journal", "description": "Field notes on Linux, backups, containers and monitoring, written by an engineer who runs the systems described here. Commands are run before they are written down."}, {"@type": "Organization", "@id": "https://kabutoxyz.com/#organization", "name": "Ops Journal", "url": "https://kabutoxyz.com/"}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "Article", "headline": "Reading a disk-full incident in the right order", "description": "Space is used, not created. Work from df to du to inodes to open files and the cause is found in minutes instead of an hour.", "datePublished": "2026-10-06", "dateModified": "2026-10-06", "inLanguage": "en", "url": "https://kabutoxyz.com/articles/disk-full-incident-order/", "mainEntityOfPage": {"@type": "WebPage", "@id": "https://kabutoxyz.com/articles/disk-full-incident-order/"}, "author": {"@type": "Organization", "name": "Ops Journal"}, "publisher": {"@type": "Organization", "name": "Ops Journal", "url": "https://kabutoxyz.com/"}, "keywords": "linux, disk, incident"}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://kabutoxyz.com/"}, {"@type": "ListItem", "position": 2, "name": "Articles", "item": "https://kabutoxyz.com/articles/"}, {"@type": "ListItem", "position": 3, "name": "Reading a disk-full incident in the right order", "item": "https://kabutoxyz.com/articles/disk-full-incident-order/"}]}</script>
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="https://kabutoxyz.com/">Ops Journal <span>&middot; Practical notes on running software in production</span></a>
+    <nav class="links">
+      <a href="https://kabutoxyz.com/">Articles</a>
+      <a href="https://kabutoxyz.com/about/">About</a>
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <div class="wrap">
+<article>
+<h1>Reading a disk-full incident in the right order</h1>
+<p class="meta">Published 2026-10-06 · 8 min read</p>
+<p>A full disk is a race: the machine may be minutes from refusing writes, and the
+temptation is to start deleting things immediately. Doing the diagnosis in a
+fixed order is faster than improvising, because each step either finds the cause
+or eliminates a whole class of them.</p>
+<h2 id="step-one-is-it-space-or-inodes">Step one: is it space or inodes</h2>
+<p>These are different resources and produce nearly identical symptoms. A
+filesystem can be completely out of inodes with terabytes free, and the error
+messages are similar enough to mislead.</p>
+<pre><code class="language-bash">df -h /
+df -i /
+</code></pre>
+<pre><code class="language-bash">Filesystem      Size  Used Avail Use% Mounted on
+/dev/vda1       232G   70G  162G  31% /
+
+Filesystem       Inodes  IUsed    IFree IUse% Mounted on
+/dev/vda1      31326208 1476771 29849437    5% /
+</code></pre>
+<p>The <code>IUse%</code> column on the second command is the one people forget to check. A
+filesystem at 100% inodes with 31% space used fails writes with the same
+<code>No space left on device</code>, and no amount of freeing space fixes it — the answer
+is finding the directory holding millions of tiny files.</p>
+<p>A directory that accumulates small files is almost always a session store, a
+cache, or a mail queue. Counting entries per directory finds it:</p>
+<pre><code class="language-bash">sudo find /var -xdev -type d -printf '%p
+' 2&gt;/dev/null | head
+</code></pre>
+<p>For a targeted hunt, count files in the usual suspects:</p>
+<pre><code class="language-bash">for d in /var/spool /var/lib /tmp /var/tmp; do
+  printf '%-16s %s
+' &quot;$d&quot; &quot;$(sudo find $d -xdev -type f 2&gt;/dev/null | wc -l)&quot;
+done
+</code></pre>
+<h2 id="step-two-which-filesystem-is-actually-full">Step two: which filesystem is actually full</h2>
+<p>On a machine with several mounts, <code>/</code> being fine says nothing about the mount
+holding the data:</p>
+<pre><code class="language-bash">df -h --output=source,size,used,avail,pcent,target | sort -k5 -r
+</code></pre>
+<p>Sorting by the use-percent column puts the worst first. This matters because the
+obvious reaction — cleaning up <code>/var/log</code> — does nothing when the full filesystem
+is <code>/srv</code> or a mounted volume.</p>
+<h2 id="step-three-where-inside-that-filesystem">Step three: where inside that filesystem</h2>
+<p>Now, and only now, walk the directory that is full. One level at a time is
+faster than a deep recursive scan and almost always enough:</p>
+<pre><code class="language-bash">du -xhd1 /var | sort -rh | head -6
+</code></pre>
+<pre><code class="language-bash">3.6G    /var
+3.0G    /var/log
+352M    /var/cache
+254M    /var/lib
+2.2M    /var/backups
+28K     /var/tmp
+</code></pre>
+<p>The <code>-x</code> flag keeps the walk on one filesystem. Without it, <code>du</code> descends into
+other mounts and reports sizes that belong to disks that are not full, which
+produces the confusing result where the numbers add up to far more than the
+filesystem's total size.</p>
+<p>Descend into the winner and repeat:</p>
+<pre><code class="language-bash">du -xhd1 /var/log | sort -rh | head -8
+</code></pre>
+<h2 id="step-four-when-du-does-not-explain-df">Step four: when du does not explain df</h2>
+<p>This is the step that resolves the puzzling cases. If <code>df</code> says the filesystem is
+full but <code>du</code> cannot account for the space, there are deleted files still held
+open by a running process. The directory entry is gone; the blocks are not freed
+until the last file descriptor closes.</p>
+<pre><code class="language-bash">sudo lsof +L1 2&gt;/dev/null | head -20
+</code></pre>
+<p><code>+L1</code> means "list files with a link count below one" — that is, unlinked files
+that still exist because something has them open. The <code>SIZE</code> column shows how
+much each is holding. A log file deleted during an incident that is still held by
+the logging daemon shows up here, and it explains the gap exactly.</p>
+<p>The fix is to restart the process holding the file, or signal it to reopen its
+logs. Deleting more files frees nothing:</p>
+<pre><code class="language-bash"># for a service that reopens logs on SIGHUP
+sudo systemctl reload myapp.service
+</code></pre>
+<h2 id="step-five-check-for-a-mounted-over-directory">Step five: check for a mounted-over directory</h2>
+<p>The other case where <code>du</code> and <code>df</code> disagree is a directory that has had a
+filesystem mounted over it. Files written before the mount still occupy space on
+the underlying filesystem but are invisible because the mount hides them.</p>
+<p>The check is to compare the mount table against the directory contents:</p>
+<pre><code class="language-bash">findmnt -o TARGET,SOURCE,FSTYPE | head -20
+</code></pre>
+<p>If a path that should contain data shows a different source than you expect, or
+a directory that should be empty on the parent filesystem is holding gigabytes,
+unmounting will reveal the hidden files. This is worth knowing because it is
+non-obvious and looks like a filesystem that is lying about its usage.</p>
+<h2 id="step-six-reclaim-in-order-of-safety">Step six: reclaim, in order of safety</h2>
+<p>With the cause identified, free space starting with the things that are
+guaranteed safe:</p>
+<pre><code class="language-bash"># journal, capped rather than deleted wholesale
+sudo journalctl --vacuum-size=500M
+
+# package cache: always safe, re-downloadable
+sudo apt-get clean
+
+# old rotated logs
+sudo find /var/log -type f -name '*.gz' -mtime +30 -delete
+</code></pre>
+<p>Then set the limits that stop it recurring — <code>SystemMaxUse</code> in
+<code>/etc/systemd/journald.conf</code> for the journal, a <code>maxsize</code> in the relevant
+logrotate rule for text logs, and a disk-space alert at 80% rather than 95% so
+the next incident is caught while there is still room to work.</p>
+<h2 id="the-order-is-the-point">The order is the point</h2>
+<p><code>df</code> for space or inodes, <code>df</code> again for which mount, <code>du</code> for where inside it,
+<code>lsof +L1</code> when they disagree, then reclaim. Skipping to the last step is what
+turns a five-minute diagnosis into an hour of deleting the wrong files.</p>
+</article>
+<section class="related">
+<h2>Related articles</h2>
+<ul class="cards">
+<li><h3><a href="https://kabutoxyz.com/articles/var-log-disk-growth/">When /var/log eats the disk: finding what actually grew</a></h3><p>A full root filesystem is usually logs, not data. Here is how to find the real culprit in three commands and cap it so it stays capped. <span class="meta">&middot; 2026-09-12</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/systemd-timer-calendar-expressions/">systemd timer calendar expressions, and the two that catch everyone</a></h3><p>OnCalendar looks like cron but is not cron. Two expression shapes look correct, parse without error, and run at the wrong time. <span class="meta">&middot; 2026-09-18</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/find-process-holding-port/">Finding which process is holding a port, and why kill does not always free it</a></h3><p>Address already in use is a symptom, not a diagnosis. Here is how to find the real owner of a port and why it sometimes refuses to release. <span class="meta">&middot; 2026-10-05</span></p></li>
+</ul>
+</section><div class="ad-slot"><!-- AdSense slot: set ADSENSE_CLIENT in build.py once approved --></div>
+  </div>
+</main>
+<footer class="site">
+  <div class="wrap">
+    <span>&copy; 2026 Ops Journal</span>
+    <span>
+      <a href="https://kabutoxyz.com/about/">About</a> &middot;
+      <a href="https://kabutoxyz.com/privacy/">Privacy</a> &middot;
+      <a href="https://kabutoxyz.com/terms/">Terms</a> &middot;
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </span>
+  </div>
+</footer>
+</body>
+</html>

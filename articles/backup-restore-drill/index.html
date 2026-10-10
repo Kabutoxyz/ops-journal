@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A backup you have never restored is not a backup</title>
+<meta name="description" content="Most backup failures are found during a restore, which is the worst possible time. A repeatable restore drill turns that into a non-event.">
+<link rel="canonical" href="https://kabutoxyz.com/articles/backup-restore-drill/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="A backup you have never restored is not a backup">
+<meta property="og:description" content="Most backup failures are found during a restore, which is the worst possible time. A repeatable restore drill turns that into a non-event.">
+<meta property="og:url" content="https://kabutoxyz.com/articles/backup-restore-drill/">
+<meta property="og:site_name" content="Ops Journal">
+<meta name="twitter:card" content="summary">
+<link rel="alternate" type="application/rss+xml" title="Ops Journal" href="https://kabutoxyz.com/feed.xml">
+<style>
+:root{
+  --bg:#fbfaf7; --panel:#ffffff; --ink:#1c1a17; --muted:#6b6459;
+  --line:#e5e0d6; --accent:#1f5f4b; --accent-soft:#eaf3ef;
+  --code-bg:#f4f1ea; --radius:10px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);
+  font-size:17px;line-height:1.65;
+}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-soft)}
+a:hover{border-bottom-color:var(--accent)}
+.wrap{max-width:760px;margin:0 auto;padding:0 20px}
+header.site{border-bottom:1px solid var(--line);background:var(--panel)}
+header.site .wrap{display:flex;align-items:baseline;justify-content:space-between;
+  gap:16px;padding-top:18px;padding-bottom:18px;flex-wrap:wrap}
+.brand{font-weight:700;font-size:1.05rem;letter-spacing:-.01em;border:none}
+.brand span{color:var(--muted);font-weight:400}
+nav.links a{margin-left:18px;font-size:.94rem;border:none;color:var(--muted)}
+nav.links a:hover{color:var(--accent)}
+main{padding:40px 0 64px}
+h1{font-size:1.85rem;line-height:1.25;letter-spacing:-.02em;margin:0 0 .5rem}
+h2{font-size:1.3rem;margin:2.2rem 0 .6rem;letter-spacing:-.01em}
+h3{font-size:1.08rem;margin:1.7rem 0 .4rem}
+p{margin:0 0 1.05rem}
+ul,ol{margin:0 0 1.05rem;padding-left:1.3rem}
+li{margin-bottom:.4rem}
+hr{border:none;border-top:1px solid var(--line);margin:2.4rem 0}
+blockquote{margin:1.4rem 0;padding:.2rem 0 .2rem 1rem;
+  border-left:3px solid var(--accent-soft);color:var(--muted)}
+code{font-family:var(--mono);font-size:.87em;background:var(--code-bg);
+  padding:.12em .38em;border-radius:5px}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px 16px;overflow-x:auto;margin:0 0 1.2rem}
+pre code{background:none;padding:0;font-size:.84rem;line-height:1.55}
+table{width:100%;border-collapse:collapse;margin:0 0 1.2rem;font-size:.94rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font-weight:600;background:var(--panel)}
+.meta{color:var(--muted);font-size:.9rem;margin-bottom:1.8rem}
+.lede{font-size:1.08rem;color:var(--muted);margin-bottom:2rem}
+.cards{list-style:none;padding:0;margin:0}
+.cards li{border-top:1px solid var(--line);padding:18px 0;margin:0}
+.cards li:first-child{border-top:none}
+.cards h3{margin:0 0 .3rem;font-size:1.12rem}
+.cards p{margin:0;color:var(--muted);font-size:.95rem}
+.related{margin-top:3rem;padding-top:1.6rem;border-top:1px solid var(--line)}
+.related h2{margin-top:0}
+.related .cards h3{font-size:1.02rem}
+.ad-slot{margin:2.4rem 0;min-height:1px}
+footer.site{border-top:1px solid var(--line);color:var(--muted);font-size:.88rem;
+  background:var(--panel)}
+footer.site .wrap{padding-top:24px;padding-bottom:28px;display:flex;
+  justify-content:space-between;gap:14px;flex-wrap:wrap}
+footer.site a{color:var(--muted);border:none}
+footer.site a:hover{color:var(--accent)}
+@media(max-width:600px){
+  body{font-size:16px}
+  h1{font-size:1.55rem}
+  nav.links a{margin-left:0;margin-right:16px}
+}
+</style>
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebSite", "@id": "https://kabutoxyz.com/#website", "url": "https://kabutoxyz.com/", "name": "Ops Journal", "description": "Field notes on Linux, backups, containers and monitoring, written by an engineer who runs the systems described here. Commands are run before they are written down."}, {"@type": "Organization", "@id": "https://kabutoxyz.com/#organization", "name": "Ops Journal", "url": "https://kabutoxyz.com/"}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "Article", "headline": "A backup you have never restored is not a backup", "description": "Most backup failures are found during a restore, which is the worst possible time. A repeatable restore drill turns that into a non-event.", "datePublished": "2026-09-24", "dateModified": "2026-09-24", "inLanguage": "en", "url": "https://kabutoxyz.com/articles/backup-restore-drill/", "mainEntityOfPage": {"@type": "WebPage", "@id": "https://kabutoxyz.com/articles/backup-restore-drill/"}, "author": {"@type": "Organization", "name": "Ops Journal"}, "publisher": {"@type": "Organization", "name": "Ops Journal", "url": "https://kabutoxyz.com/"}, "keywords": "backups, recovery, ops"}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://kabutoxyz.com/"}, {"@type": "ListItem", "position": 2, "name": "Articles", "item": "https://kabutoxyz.com/articles/"}, {"@type": "ListItem", "position": 3, "name": "A backup you have never restored is not a backup", "item": "https://kabutoxyz.com/articles/backup-restore-drill/"}]}</script>
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="https://kabutoxyz.com/">Ops Journal <span>&middot; Practical notes on running software in production</span></a>
+    <nav class="links">
+      <a href="https://kabutoxyz.com/">Articles</a>
+      <a href="https://kabutoxyz.com/about/">About</a>
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <div class="wrap">
+<article>
+<h1>A backup you have never restored is not a backup</h1>
+<p class="meta">Published 2026-09-24 · 9 min read</p>
+<p>The uncomfortable truth about backups is that the backup job is not the thing
+that has to work. The restore is. A nightly <code>tar</code> that has run cleanly for two
+years tells you nothing about whether the archive can be turned back into a
+working system, because the failure modes that matter — a truncated file, a
+missing exclude, a database dumped while it was being written — all stay invisible
+until you try to read the data back.</p>
+<p>This is the drill that finds those failures on a quiet afternoon instead of
+during an incident.</p>
+<h2 id="define-what-a-successful-restore-means-before-you-test">Define what a successful restore means before you test</h2>
+<p>"We restored the backup" is not a criterion, because it does not say what
+working looks like. Write it down as a checkable statement first. For a typical
+web service, that is something like:</p>
+<ul>
+<li>the application starts from the restored files</li>
+<li>the database answers a known query and returns the expected row count</li>
+<li>a file uploaded after the last full backup is present</li>
+</ul>
+<p>Without that list, a drill degenerates into "the tar file extracted without
+error", which is the weakest possible signal.</p>
+<h2 id="verify-the-archive-before-trusting-its-contents">Verify the archive before trusting its contents</h2>
+<p>For a <code>tar</code> archive, listing the members is cheap and catches truncation
+immediately:</p>
+<pre><code class="language-bash">tar -tzf /backups/srv-2026-09-23.tar.gz &gt; /dev/null &amp;&amp; echo &quot;archive readable&quot;
+</code></pre>
+<p>A truncated gzip fails here with <code>unexpected end of file</code>, which is exactly the
+class of corruption that a successful <code>tar -czf</code> run does not reveal — the
+producing process can exit zero after writing a short file if the disk filled
+mid-write.</p>
+<p>For anything where integrity matters, keep a checksum alongside the archive and
+verify it as part of the drill:</p>
+<pre><code class="language-bash">sha256sum /backups/srv-2026-09-23.tar.gz &gt; /backups/srv-2026-09-23.sha256
+
+# later, and this is the step that actually proves the bytes survived
+sha256sum -c /backups/srv-2026-09-23.sha256
+</code></pre>
+<p><code>sha256sum -c</code> returns non-zero and prints <code>FAILED</code> on mismatch, which makes it
+usable directly in a script.</p>
+<h2 id="restore-into-a-scratch-location-never-over-the-live-system">Restore into a scratch location, never over the live system</h2>
+<p>The drill must not be able to damage production. Extract into a temporary tree
+and work from there:</p>
+<pre><code class="language-bash">sudo mkdir -p /var/tmp/restore-drill
+sudo tar -xzf /backups/srv-2026-09-23.tar.gz -C /var/tmp/restore-drill
+</code></pre>
+<p>Then run the checks from your list against that tree. For a config-driven
+service, the strongest cheap check is to validate the restored configuration
+rather than start it:</p>
+<pre><code class="language-bash"># example: validate an nginx config from the restored tree
+nginx -t -c /var/tmp/restore-drill/etc/nginx/nginx.conf
+</code></pre>
+<p>That catches the failure mode where the backup captured files but not the
+symlinks or permissions they depend on, which is common when the backup was
+taken with a tool that follows links or drops ownership.</p>
+<h2 id="databases-need-their-own-procedure">Databases need their own procedure</h2>
+<p>A file-level copy of a running database is not a backup. It is a snapshot of
+whatever pages happened to be on disk at that moment, and it is frequently
+unrecoverable. Use the engine's own dump:</p>
+<pre><code class="language-bash"># PostgreSQL: logical dump, consistent without stopping the server
+pg_dump -Fc -f /backups/app-2026-09-23.dump appdb
+
+# verify it can be read back, without importing it anywhere
+pg_restore --list /backups/app-2026-09-23.dump | head
+</code></pre>
+<p><code>pg_restore --list</code> reads the archive's table of contents. If the dump is
+truncated it fails here, and it does so without needing a database to restore
+into, which makes it a good daily automated check.</p>
+<p>The corresponding restore into a scratch database, which is what the drill
+should exercise at least monthly:</p>
+<pre><code class="language-bash">createdb appdb_restore_test
+pg_restore -d appdb_restore_test /backups/app-2026-09-23.dump
+psql -d appdb_restore_test -c 'select count(*) from users;'
+dropdb appdb_restore_test
+</code></pre>
+<p>The row count is the point. It is a number you can compare against production,
+which turns "the restore ran" into "the data is there".</p>
+<h2 id="automate-the-cheap-checks-do-the-full-drill-by-hand">Automate the cheap checks, do the full drill by hand</h2>
+<p>A useful split, based on how often each check should run:</p>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th>Frequency</th>
+<th>Cost</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Archive readable (<code>tar -tzf</code>)</td>
+<td>every backup</td>
+<td>seconds</td>
+</tr>
+<tr>
+<td>Checksum verified</td>
+<td>every backup</td>
+<td>minutes on large archives</td>
+</tr>
+<tr>
+<td>Dump table of contents readable</td>
+<td>every backup</td>
+<td>seconds</td>
+</tr>
+<tr>
+<td>Full restore into scratch + row count</td>
+<td>monthly</td>
+<td>minutes</td>
+</tr>
+<tr>
+<td>Restore on a clean machine</td>
+<td>quarterly</td>
+<td>hours</td>
+</tr>
+</tbody>
+</table>
+<p>The first three belong in the backup script itself, so a bad backup is caught
+the same night it is produced rather than a month later. The last two are
+exercises that prove the procedure works end to end, and they are the ones that
+find the missing step in your runbook.</p>
+<h2 id="record-the-time-it-takes">Record the time it takes</h2>
+<p>The number nobody has until they need it is how long a restore actually takes.
+Time the drill:</p>
+<pre><code class="language-bash">time sudo tar -xzf /backups/srv-2026-09-23.tar.gz -C /var/tmp/restore-drill
+</code></pre>
+<p>That figure becomes your recovery time estimate, and it is usually larger than
+people assume — extraction of a multi-gigabyte archive on a busy disk can take
+longer than the restore itself. Knowing it in advance changes how you respond
+when the real thing happens.</p>
+<h2 id="clean-up-and-check-the-disk-first">Clean up, and check the disk first</h2>
+<p>Drills consume disk. On a small volume, extracting a full backup can fill the
+filesystem and cause the very incident you are rehearsing for:</p>
+<pre><code class="language-bash">df -h /var/tmp
+sudo rm -rf /var/tmp/restore-drill
+</code></pre>
+<h2 id="the-minimum-viable-version">The minimum viable version</h2>
+<p>If a full drill is too much to start with, do this much today: pick the most
+recent backup, list the archive, verify the checksum, and extract one file you
+can identify. That takes five minutes and will already find the backups that are
+silently empty, which is the single most common failure.</p>
+<p>Then put the monthly restore in a calendar with the name of a person attached to
+it. A drill that is nobody's job does not happen.</p>
+</article>
+<section class="related">
+<h2>Related articles</h2>
+<ul class="cards">
+<li><h3><a href="https://kabutoxyz.com/articles/honest-health-checks/">A health check that does not lie: checking the thing that can actually fail</a></h3><p>A check that returns 200 while the database is unreachable is worse than no check. Here is how to test the dependency, not the process. <span class="meta">&middot; 2026-10-03</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/rsync-backup-flags/">rsync for backups: the flags that matter and the ones that quietly change what is copied</a></h3><p>A trailing slash changes the entire result, and --delete makes a wrong path destructive. Test with --dry-run until the output matches intent. <span class="meta">&middot; 2026-10-07</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/file-descriptor-leak/">Too many open files: finding a file descriptor leak before it takes the service down</a></h3><p>EMFILE arrives long before the crash. Reading the per-process limits and counting open descriptors shows which service is leaking and how fast. <span class="meta">&middot; 2026-10-07</span></p></li>
+</ul>
+</section><div class="ad-slot"><!-- AdSense slot: set ADSENSE_CLIENT in build.py once approved --></div>
+  </div>
+</main>
+<footer class="site">
+  <div class="wrap">
+    <span>&copy; 2026 Ops Journal</span>
+    <span>
+      <a href="https://kabutoxyz.com/about/">About</a> &middot;
+      <a href="https://kabutoxyz.com/privacy/">Privacy</a> &middot;
+      <a href="https://kabutoxyz.com/terms/">Terms</a> &middot;
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </span>
+  </div>
+</footer>
+</body>
+</html>

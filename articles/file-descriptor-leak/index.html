@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Too many open files: finding a file descriptor leak</title>
+<meta name="description" content="EMFILE arrives long before the crash. Reading the per-process limits and counting open descriptors shows which service is leaking and how fast.">
+<link rel="canonical" href="https://kabutoxyz.com/articles/file-descriptor-leak/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Too many open files: finding a file descriptor leak">
+<meta property="og:description" content="EMFILE arrives long before the crash. Reading the per-process limits and counting open descriptors shows which service is leaking and how fast.">
+<meta property="og:url" content="https://kabutoxyz.com/articles/file-descriptor-leak/">
+<meta property="og:site_name" content="Ops Journal">
+<meta name="twitter:card" content="summary">
+<link rel="alternate" type="application/rss+xml" title="Ops Journal" href="https://kabutoxyz.com/feed.xml">
+<style>
+:root{
+  --bg:#fbfaf7; --panel:#ffffff; --ink:#1c1a17; --muted:#6b6459;
+  --line:#e5e0d6; --accent:#1f5f4b; --accent-soft:#eaf3ef;
+  --code-bg:#f4f1ea; --radius:10px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);
+  font-size:17px;line-height:1.65;
+}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-soft)}
+a:hover{border-bottom-color:var(--accent)}
+.wrap{max-width:760px;margin:0 auto;padding:0 20px}
+header.site{border-bottom:1px solid var(--line);background:var(--panel)}
+header.site .wrap{display:flex;align-items:baseline;justify-content:space-between;
+  gap:16px;padding-top:18px;padding-bottom:18px;flex-wrap:wrap}
+.brand{font-weight:700;font-size:1.05rem;letter-spacing:-.01em;border:none}
+.brand span{color:var(--muted);font-weight:400}
+nav.links a{margin-left:18px;font-size:.94rem;border:none;color:var(--muted)}
+nav.links a:hover{color:var(--accent)}
+main{padding:40px 0 64px}
+h1{font-size:1.85rem;line-height:1.25;letter-spacing:-.02em;margin:0 0 .5rem}
+h2{font-size:1.3rem;margin:2.2rem 0 .6rem;letter-spacing:-.01em}
+h3{font-size:1.08rem;margin:1.7rem 0 .4rem}
+p{margin:0 0 1.05rem}
+ul,ol{margin:0 0 1.05rem;padding-left:1.3rem}
+li{margin-bottom:.4rem}
+hr{border:none;border-top:1px solid var(--line);margin:2.4rem 0}
+blockquote{margin:1.4rem 0;padding:.2rem 0 .2rem 1rem;
+  border-left:3px solid var(--accent-soft);color:var(--muted)}
+code{font-family:var(--mono);font-size:.87em;background:var(--code-bg);
+  padding:.12em .38em;border-radius:5px}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px 16px;overflow-x:auto;margin:0 0 1.2rem}
+pre code{background:none;padding:0;font-size:.84rem;line-height:1.55}
+table{width:100%;border-collapse:collapse;margin:0 0 1.2rem;font-size:.94rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font-weight:600;background:var(--panel)}
+.meta{color:var(--muted);font-size:.9rem;margin-bottom:1.8rem}
+.lede{font-size:1.08rem;color:var(--muted);margin-bottom:2rem}
+.cards{list-style:none;padding:0;margin:0}
+.cards li{border-top:1px solid var(--line);padding:18px 0;margin:0}
+.cards li:first-child{border-top:none}
+.cards h3{margin:0 0 .3rem;font-size:1.12rem}
+.cards p{margin:0;color:var(--muted);font-size:.95rem}
+.related{margin-top:3rem;padding-top:1.6rem;border-top:1px solid var(--line)}
+.related h2{margin-top:0}
+.related .cards h3{font-size:1.02rem}
+.ad-slot{margin:2.4rem 0;min-height:1px}
+footer.site{border-top:1px solid var(--line);color:var(--muted);font-size:.88rem;
+  background:var(--panel)}
+footer.site .wrap{padding-top:24px;padding-bottom:28px;display:flex;
+  justify-content:space-between;gap:14px;flex-wrap:wrap}
+footer.site a{color:var(--muted);border:none}
+footer.site a:hover{color:var(--accent)}
+@media(max-width:600px){
+  body{font-size:16px}
+  h1{font-size:1.55rem}
+  nav.links a{margin-left:0;margin-right:16px}
+}
+</style>
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebSite", "@id": "https://kabutoxyz.com/#website", "url": "https://kabutoxyz.com/", "name": "Ops Journal", "description": "Field notes on Linux, backups, containers and monitoring, written by an engineer who runs the systems described here. Commands are run before they are written down."}, {"@type": "Organization", "@id": "https://kabutoxyz.com/#organization", "name": "Ops Journal", "url": "https://kabutoxyz.com/"}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "Article", "headline": "Too many open files: finding a file descriptor leak", "description": "EMFILE arrives long before the crash. Reading the per-process limits and counting open descriptors shows which service is leaking and how fast.", "datePublished": "2026-10-07", "dateModified": "2026-10-07", "inLanguage": "en", "url": "https://kabutoxyz.com/articles/file-descriptor-leak/", "mainEntityOfPage": {"@type": "WebPage", "@id": "https://kabutoxyz.com/articles/file-descriptor-leak/"}, "author": {"@type": "Organization", "name": "Ops Journal"}, "publisher": {"@type": "Organization", "name": "Ops Journal", "url": "https://kabutoxyz.com/"}, "keywords": "linux, limits, debugging"}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://kabutoxyz.com/"}, {"@type": "ListItem", "position": 2, "name": "Articles", "item": "https://kabutoxyz.com/articles/"}, {"@type": "ListItem", "position": 3, "name": "Too many open files: finding a file descriptor leak", "item": "https://kabutoxyz.com/articles/file-descriptor-leak/"}]}</script>
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="https://kabutoxyz.com/">Ops Journal <span>&middot; Practical notes on running software in production</span></a>
+    <nav class="links">
+      <a href="https://kabutoxyz.com/">Articles</a>
+      <a href="https://kabutoxyz.com/about/">About</a>
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <div class="wrap">
+<article>
+<h1>Too many open files: finding a file descriptor leak before it takes the service down</h1>
+<p class="meta">Published 2026-10-07 · 8 min read</p>
+<p><code>Too many open files</code> is one of the few errors that tells you exactly what is
+wrong and nothing about where. The limit was reached, a service cannot open
+anything else, and from the outside it looks like a sudden failure even though
+the cause accumulated over days.</p>
+<p>The work is in three parts: find the limit, find which process is at it, and
+find what it is holding.</p>
+<h2 id="find-the-limit-and-notice-there-are-two">Find the limit, and notice there are two</h2>
+<p>A process has a soft limit and a hard limit. The soft limit is what is enforced
+and can be raised by the process itself up to the hard limit. The hard limit is
+the ceiling, and only root can raise it.</p>
+<pre><code class="language-bash">ulimit -n        # soft limit
+ulimit -Hn       # hard limit
+</code></pre>
+<p>On this machine, in a normal shell:</p>
+<pre><code>4096
+1048576
+</code></pre>
+<p>That gap is the usual situation on a modern systemd host: the shell's soft limit
+is conservative while the hard limit is effectively unlimited. A service that
+inherits the soft limit will hit a wall at 4096 while the system is nowhere near
+its own capacity.</p>
+<p>For a process already running, ask the kernel rather than the shell — the limits
+are per-process and may have been set at start time:</p>
+<pre><code class="language-bash">cat /proc/&lt;PID&gt;/limits | grep -i 'open files'
+</code></pre>
+<p>This reads the actual enforced values for that process, which is the only
+authoritative answer. A service started by systemd may have a different limit
+from one started by hand, because systemd applies <code>LimitNOFILE</code> from the unit.</p>
+<h2 id="find-which-process-is-closest-to-its-limit">Find which process is closest to its limit</h2>
+<p>Rather than guessing, count descriptors for the processes you care about. The
+count is a directory listing of the process's own descriptor table:</p>
+<pre><code class="language-bash">for pid in $(pgrep -f 'myapp'); do
+  n=$(sudo ls /proc/$pid/fd 2&gt;/dev/null | wc -l)
+  lim=$(grep -i 'open files' /proc/$pid/limits | awk '{print $4}')
+  printf 'pid=%-8s open=%-8s soft_limit=%s
+' &quot;$pid&quot; &quot;$n&quot; &quot;$lim&quot;
+done
+</code></pre>
+<p>The comparison between <code>open</code> and <code>soft_limit</code> is the whole diagnosis. A service
+sitting at 3,900 of 4,096 has minutes left; one at 40 is not the problem.</p>
+<h2 id="what-a-healthy-process-looks-like">What a healthy process looks like</h2>
+<p>To judge whether a number is a leak, you need a baseline. For a service that has
+been running for days, compare the count now with the count shortly after
+startup. A stable service fluctuates within a range; a leaking one climbs
+monotonically.</p>
+<p>Sampling it over an hour is enough to see the trend:</p>
+<pre><code class="language-bash">pid=$(pgrep -f 'myapp' | head -1)
+for i in $(seq 1 6); do
+  printf '%s open=%s
+' &quot;$(date -u +%H:%M)&quot; &quot;$(sudo ls /proc/$pid/fd | wc -l)&quot;
+  sleep 600
+done
+</code></pre>
+<p>A count that only ever goes up — even slowly — is a leak. A count that rises
+under load and falls when idle is normal connection churn.</p>
+<h2 id="find-what-is-being-held">Find what is being held</h2>
+<p>Listing the descriptors shows what each one points at, which usually names the
+culprit directly:</p>
+<pre><code class="language-bash">sudo ls -l /proc/&lt;PID&gt;/fd | head -30
+</code></pre>
+<p>Each line shows the target: a file path, a socket, a pipe, or <code>[eventpoll]</code>.
+Reading the breakdown by type is faster than reading individual lines:</p>
+<pre><code class="language-bash">sudo ls -l /proc/&lt;PID&gt;/fd \
+  | awk '{print $NF}' \
+  | sed -E 's#.*\.(log|db|sock)$#\1#; s#socket:.*#socket#; s#pipe:.*#pipe#; s#anon_inode.*#anon_inode#' \
+  | sort | uniq -c | sort -rn | head
+</code></pre>
+<p>The two leaks worth knowing:</p>
+<ul>
+<li><strong>Sockets climbing without bound</strong> — almost always a connection pool that
+  never closes connections on error paths. The application opens a new
+  connection on failure and forgets the old one.</li>
+<li><strong>The same file opened many times</strong> — a file handle opened per request and
+  never closed, often a config or log file re-opened inside a hot loop.</li>
+</ul>
+<h2 id="the-kernel-side-view-when-a-process-will-not-show-its-files">The kernel-side view, when a process will not show its files</h2>
+<p>If <code>/proc/&lt;PID&gt;/fd</code> is unreadable (a process in <code>D</code> state, or one owned by
+another user without <code>sudo</code>), <code>lsof</code> gives the same information from the kernel's
+file table:</p>
+<pre><code class="language-bash">sudo lsof -p &lt;PID&gt; | wc -l
+sudo lsof -p &lt;PID&gt; | awk '{print $5}' | sort | uniq -c | sort -rn | head
+</code></pre>
+<p><code>lsof</code> is slower than reading <code>/proc</code> directly because it walks the whole table,
+but it works when the direct read fails and it can be filtered by type.</p>
+<h2 id="fixing-it-raise-the-limit-then-fix-the-leak">Fixing it: raise the limit, then fix the leak</h2>
+<p>Raising <code>LimitNOFILE</code> buys time and is the right immediate action, but it is not
+a fix — it moves the wall further out while the leak continues.</p>
+<p>In a systemd unit:</p>
+<pre><code class="language-ini">[Service]
+LimitNOFILE=65535
+</code></pre>
+<p>Then:</p>
+<pre><code class="language-bash">sudo systemctl daemon-reload
+sudo systemctl restart myapp.service
+</code></pre>
+<p>Confirm the new limit actually applied, rather than assuming:</p>
+<pre><code class="language-bash">cat /proc/$(pgrep -f myapp | head -1)/limits | grep -i 'open files'
+</code></pre>
+<p>A limit set in a shell profile will not affect a systemd service, and this check
+is how you find that out before the next incident.</p>
+<p>The real fix is on the application side: ensure every error path closes what it
+opened. Where that is not under your control, a restart on a schedule is a
+legitimate mitigation, though it is worth being honest that it is a mitigation
+and not a repair.</p>
+<h2 id="add-the-alarm-before-you-need-it">Add the alarm before you need it</h2>
+<p>The useful alert is on the ratio, not on the error. Watching
+<code>open / soft_limit</code> and warning at 80% gives time to act, while alerting on
+<code>EMFILE</code> means the service has already failed:</p>
+<pre><code class="language-bash"># exit 1 when a process is above 80% of its descriptor limit
+pid=$(pgrep -f myapp | head -1)
+open=$(sudo ls /proc/$pid/fd | wc -l)
+soft=$(grep -i 'open files' /proc/$pid/limits | awk '{print $4}')
+[ &quot;$open&quot; -gt $((soft * 80 / 100)) ] &amp;&amp; echo &quot;WARN $open/$soft&quot;
+</code></pre>
+<p>That is the same three numbers as the diagnosis, arranged so they run
+unattended.</p>
+</article>
+<section class="related">
+<h2>Related articles</h2>
+<ul class="cards">
+<li><h3><a href="https://kabutoxyz.com/articles/systemd-restart-policy-crash-loop/">Crash loops: reading systemd restart policies instead of guessing</a></h3><p>Restart=on-failure and StartLimitBurst decide whether a service recovers or dies. Read them from the running unit, not from the file you think is loaded. <span class="meta">&middot; 2026-10-07</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/var-log-disk-growth/">When /var/log eats the disk: finding what actually grew</a></h3><p>A full root filesystem is usually logs, not data. Here is how to find the real culprit in three commands and cap it so it stays capped. <span class="meta">&middot; 2026-09-12</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/systemd-timer-calendar-expressions/">systemd timer calendar expressions, and the two that catch everyone</a></h3><p>OnCalendar looks like cron but is not cron. Two expression shapes look correct, parse without error, and run at the wrong time. <span class="meta">&middot; 2026-09-18</span></p></li>
+</ul>
+</section><div class="ad-slot"><!-- AdSense slot: set ADSENSE_CLIENT in build.py once approved --></div>
+  </div>
+</main>
+<footer class="site">
+  <div class="wrap">
+    <span>&copy; 2026 Ops Journal</span>
+    <span>
+      <a href="https://kabutoxyz.com/about/">About</a> &middot;
+      <a href="https://kabutoxyz.com/privacy/">Privacy</a> &middot;
+      <a href="https://kabutoxyz.com/terms/">Terms</a> &middot;
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </span>
+  </div>
+</footer>
+</body>
+</html>

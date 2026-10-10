@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://kabutoxyz.com/sitemap.xml
+User-agent: GPTBot
+Allow: /
+
+Sitemap: https://kabutoxyz.com/sitemap.xml

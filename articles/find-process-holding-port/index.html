@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Finding which process holds a port, and why kill fails</title>
+<meta name="description" content="Address already in use is a symptom, not a diagnosis. Here is how to find the real owner of a port and why it sometimes refuses to release.">
+<link rel="canonical" href="https://kabutoxyz.com/articles/find-process-holding-port/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Finding which process holds a port, and why kill fails">
+<meta property="og:description" content="Address already in use is a symptom, not a diagnosis. Here is how to find the real owner of a port and why it sometimes refuses to release.">
+<meta property="og:url" content="https://kabutoxyz.com/articles/find-process-holding-port/">
+<meta property="og:site_name" content="Ops Journal">
+<meta name="twitter:card" content="summary">
+<link rel="alternate" type="application/rss+xml" title="Ops Journal" href="https://kabutoxyz.com/feed.xml">
+<style>
+:root{
+  --bg:#fbfaf7; --panel:#ffffff; --ink:#1c1a17; --muted:#6b6459;
+  --line:#e5e0d6; --accent:#1f5f4b; --accent-soft:#eaf3ef;
+  --code-bg:#f4f1ea; --radius:10px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);
+  font-size:17px;line-height:1.65;
+}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-soft)}
+a:hover{border-bottom-color:var(--accent)}
+.wrap{max-width:760px;margin:0 auto;padding:0 20px}
+header.site{border-bottom:1px solid var(--line);background:var(--panel)}
+header.site .wrap{display:flex;align-items:baseline;justify-content:space-between;
+  gap:16px;padding-top:18px;padding-bottom:18px;flex-wrap:wrap}
+.brand{font-weight:700;font-size:1.05rem;letter-spacing:-.01em;border:none}
+.brand span{color:var(--muted);font-weight:400}
+nav.links a{margin-left:18px;font-size:.94rem;border:none;color:var(--muted)}
+nav.links a:hover{color:var(--accent)}
+main{padding:40px 0 64px}
+h1{font-size:1.85rem;line-height:1.25;letter-spacing:-.02em;margin:0 0 .5rem}
+h2{font-size:1.3rem;margin:2.2rem 0 .6rem;letter-spacing:-.01em}
+h3{font-size:1.08rem;margin:1.7rem 0 .4rem}
+p{margin:0 0 1.05rem}
+ul,ol{margin:0 0 1.05rem;padding-left:1.3rem}
+li{margin-bottom:.4rem}
+hr{border:none;border-top:1px solid var(--line);margin:2.4rem 0}
+blockquote{margin:1.4rem 0;padding:.2rem 0 .2rem 1rem;
+  border-left:3px solid var(--accent-soft);color:var(--muted)}
+code{font-family:var(--mono);font-size:.87em;background:var(--code-bg);
+  padding:.12em .38em;border-radius:5px}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px 16px;overflow-x:auto;margin:0 0 1.2rem}
+pre code{background:none;padding:0;font-size:.84rem;line-height:1.55}
+table{width:100%;border-collapse:collapse;margin:0 0 1.2rem;font-size:.94rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font-weight:600;background:var(--panel)}
+.meta{color:var(--muted);font-size:.9rem;margin-bottom:1.8rem}
+.lede{font-size:1.08rem;color:var(--muted);margin-bottom:2rem}
+.cards{list-style:none;padding:0;margin:0}
+.cards li{border-top:1px solid var(--line);padding:18px 0;margin:0}
+.cards li:first-child{border-top:none}
+.cards h3{margin:0 0 .3rem;font-size:1.12rem}
+.cards p{margin:0;color:var(--muted);font-size:.95rem}
+.related{margin-top:3rem;padding-top:1.6rem;border-top:1px solid var(--line)}
+.related h2{margin-top:0}
+.related .cards h3{font-size:1.02rem}
+.ad-slot{margin:2.4rem 0;min-height:1px}
+footer.site{border-top:1px solid var(--line);color:var(--muted);font-size:.88rem;
+  background:var(--panel)}
+footer.site .wrap{padding-top:24px;padding-bottom:28px;display:flex;
+  justify-content:space-between;gap:14px;flex-wrap:wrap}
+footer.site a{color:var(--muted);border:none}
+footer.site a:hover{color:var(--accent)}
+@media(max-width:600px){
+  body{font-size:16px}
+  h1{font-size:1.55rem}
+  nav.links a{margin-left:0;margin-right:16px}
+}
+</style>
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebSite", "@id": "https://kabutoxyz.com/#website", "url": "https://kabutoxyz.com/", "name": "Ops Journal", "description": "Field notes on Linux, backups, containers and monitoring, written by an engineer who runs the systems described here. Commands are run before they are written down."}, {"@type": "Organization", "@id": "https://kabutoxyz.com/#organization", "name": "Ops Journal", "url": "https://kabutoxyz.com/"}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "Article", "headline": "Finding which process holds a port, and why kill fails", "description": "Address already in use is a symptom, not a diagnosis. Here is how to find the real owner of a port and why it sometimes refuses to release.", "datePublished": "2026-10-05", "dateModified": "2026-10-05", "inLanguage": "en", "url": "https://kabutoxyz.com/articles/find-process-holding-port/", "mainEntityOfPage": {"@type": "WebPage", "@id": "https://kabutoxyz.com/articles/find-process-holding-port/"}, "author": {"@type": "Organization", "name": "Ops Journal"}, "publisher": {"@type": "Organization", "name": "Ops Journal", "url": "https://kabutoxyz.com/"}, "keywords": "linux, networking, processes"}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://kabutoxyz.com/"}, {"@type": "ListItem", "position": 2, "name": "Articles", "item": "https://kabutoxyz.com/articles/"}, {"@type": "ListItem", "position": 3, "name": "Finding which process holds a port, and why kill fails", "item": "https://kabutoxyz.com/articles/find-process-holding-port/"}]}</script>
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="https://kabutoxyz.com/">Ops Journal <span>&middot; Practical notes on running software in production</span></a>
+    <nav class="links">
+      <a href="https://kabutoxyz.com/">Articles</a>
+      <a href="https://kabutoxyz.com/about/">About</a>
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <div class="wrap">
+<article>
+<h1>Finding which process is holding a port, and why kill does not always free it</h1>
+<p class="meta">Published 2026-10-05 · 7 min read</p>
+<p><code>bind: address already in use</code> is one of the most common errors in operations
+and one of the most frequently misdiagnosed. The port is held by <em>something</em>,
+and the useful work is finding out what, then understanding why it is still
+there.</p>
+<h2 id="start-with-the-listening-sockets">Start with the listening sockets</h2>
+<p><code>ss</code> is the modern replacement for <code>netstat</code> and shows what is listening, along
+with the process that owns each socket:</p>
+<pre><code class="language-bash">sudo ss -tulpn
+</code></pre>
+<p>The flags are worth reading one by one, because the right combination saves a
+lot of guessing: <code>-t</code> for TCP, <code>-u</code> for UDP, <code>-l</code> for listening sockets only,
+<code>-p</code> to show the owning process, and <code>-n</code> to print numbers instead of resolving
+service names and hostnames. Dropping <code>-n</code> makes the command slow on a host with
+slow DNS, and the names it prints are rarely more useful than the port number.</p>
+<p>To answer the specific question — who has port 8080 — filter on the port:</p>
+<pre><code class="language-bash">sudo ss -tulpn | grep ':8080'
+</code></pre>
+<p>The <code>-p</code> flag requires root to see processes you do not own. Run it without
+<code>sudo</code> and sockets owned by other users show an empty process column, which
+looks like the socket has no owner. That misreading sends people looking for a
+phantom process that is in fact running as another user.</p>
+<h2 id="confirm-what-a-socket-is-actually-bound-to">Confirm what a socket is actually bound to</h2>
+<p>A service bound to <code>127.0.0.1:8080</code> and one bound to <code>0.0.0.0:8080</code> look similar
+in a quick scan but behave completely differently: the first is reachable only
+from the machine itself, the second from anywhere. The local address column tells
+you which:</p>
+<pre><code>Netid State  Recv-Q Send-Q Local Address:Port Peer Address:Port Process
+tcp   LISTEN 0      128          0.0.0.0:22        0.0.0.0:*     users:((&quot;sshd&quot;,pid=712,fd=3))
+tcp   LISTEN 0      511        127.0.0.1:8080      0.0.0.0:*     users:((&quot;node&quot;,pid=4411,fd=19))
+</code></pre>
+<p>The second line is a service that cannot be reached from outside the host, which
+is a common cause of "it works locally but not remotely" that has nothing to do
+with a firewall.</p>
+<h2 id="when-ss-shows-nothing-and-the-port-is-still-in-use">When ss shows nothing and the port is still in use</h2>
+<p>This is the case that wastes the most time. <code>ss</code> lists no listener on the port,
+yet binding fails. The usual cause is a socket in <code>TIME_WAIT</code>, which is a normal
+part of TCP teardown: the side that closed first keeps the connection record for
+a period (twice the maximum segment lifetime) so late packets are not
+misinterpreted.</p>
+<p>Sockets in this state do not appear in a listening-only listing:</p>
+<pre><code class="language-bash">ss -tan | grep ':8080'
+</code></pre>
+<p>If the output shows <code>TIME_WAIT</code> entries and no <code>LISTEN</code>, the port is not held by
+a process at all — it is being held by the kernel on behalf of a closed
+connection. Nothing needs to be killed. It clears itself, typically within a
+minute.</p>
+<p>There is a legitimate fix for a server that needs to rebind immediately during
+development, and it belongs in the application, not in a <code>sysctl</code> change:</p>
+<pre><code class="language-python"># setsockopt(SO_REUSEADDR) lets a new socket bind while old
+# connections are still in TIME_WAIT. Most frameworks set this already.
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+</code></pre>
+<p><code>SO_REUSEADDR</code> is why a well-behaved server restarts cleanly while a hand-rolled
+one does not. It is worth checking whether your framework sets it before reaching
+for anything more drastic.</p>
+<h2 id="a-process-that-will-not-die">A process that will not die</h2>
+<p>When the owner is a real process and <code>kill</code> does not remove it, the sequence is
+worth following in order rather than jumping to <code>-9</code>.</p>
+<p>First, send the default <code>SIGTERM</code>, which asks the process to shut down cleanly:</p>
+<pre><code class="language-bash">kill 4411
+</code></pre>
+<p>Then confirm whether it actually exited, rather than assuming:</p>
+<pre><code class="language-bash">ps -p 4411 -o pid,stat,etime,cmd
+</code></pre>
+<p>A process in state <code>D</code> (uninterruptible sleep) is blocked in a kernel call,
+usually disk I/O on a failing device or a stuck network filesystem. <code>SIGKILL</code>
+cannot interrupt <code>D</code> state, because the signal is delivered when the process
+returns to userspace and it never does. In that case the only options are to fix
+the underlying I/O or reboot. Killing harder will not help, and it is worth
+recognising the state before spending time on it.</p>
+<p>If the process is in a normal state and ignored <code>SIGTERM</code>, escalate:</p>
+<pre><code class="language-bash">kill -9 4411
+</code></pre>
+<h2 id="the-trap-the-parent-restarts-the-child">The trap: the parent restarts the child</h2>
+<p>A process that reappears with a new PID seconds after being killed is not
+failing to die. It is being respawned, and the thing to look at is its parent:</p>
+<pre><code class="language-bash">ps -o pid,ppid,cmd -p 4411
+</code></pre>
+<p>Then look at what the parent is:</p>
+<pre><code class="language-bash">ps -p &lt;PPID&gt; -o pid,cmd
+</code></pre>
+<p>If the parent is systemd, the unit is configured to restart and the correct
+action is to stop the unit rather than the process:</p>
+<pre><code class="language-bash">sudo systemctl stop myapp.service
+</code></pre>
+<p>If the parent is a supervisor like <code>supervisord</code> or a container runtime, the
+same logic applies — stop the supervisor's view of the service, or it will
+simply start the process again. Killing the child repeatedly is the loop that
+makes people conclude the process is "unkillable".</p>
+<p>To find the unit that owns a process directly, when you know the PID:</p>
+<pre><code class="language-bash">systemctl status 4411
+</code></pre>
+<p><code>systemctl status</code> accepts a PID and prints the unit it belongs to, which
+short-circuits the parent-chasing above.</p>
+<h2 id="check-the-container-case-separately">Check the container case separately</h2>
+<p>If the port is held inside a container, the host's <code>ss</code> may show the published
+port but the owning process is in another namespace:</p>
+<pre><code class="language-bash">docker ps --format '{{.Names}}  {{.Ports}}' | grep 8080
+</code></pre>
+<p>The fix is to stop or remove the container, not to hunt for a host process. On
+systems where you do not have Docker socket access, <code>ss</code> will show the port as
+bound by <code>docker-proxy</code> or by the container runtime, which is the tell that the
+real owner is inside a container.</p>
+<h2 id="the-short-sequence-worth-memorising">The short sequence worth memorising</h2>
+<pre><code class="language-bash">sudo ss -tulpn | grep ':PORT'    # is something listening, and who
+ss -tan | grep ':PORT'           # is it TIME_WAIT instead
+ps -o pid,ppid,cmd -p PID        # who started it, if it keeps coming back
+systemctl status PID             # which unit owns it
+</code></pre>
+<p>Work through those four in order and the port is either free or you know exactly
+what is holding it and why.</p>
+</article>
+<section class="related">
+<h2>Related articles</h2>
+<ul class="cards">
+<li><h3><a href="https://kabutoxyz.com/articles/test-remote-port-reachability/">Testing whether a remote port is reachable, and what each failure means</a></h3><p>Connection refused, timed out and no route are three different problems. Tell them apart and the fault is localised in one command. <span class="meta">&middot; 2026-10-06</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/var-log-disk-growth/">When /var/log eats the disk: finding what actually grew</a></h3><p>A full root filesystem is usually logs, not data. Here is how to find the real culprit in three commands and cap it so it stays capped. <span class="meta">&middot; 2026-09-12</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/systemd-timer-calendar-expressions/">systemd timer calendar expressions, and the two that catch everyone</a></h3><p>OnCalendar looks like cron but is not cron. Two expression shapes look correct, parse without error, and run at the wrong time. <span class="meta">&middot; 2026-09-18</span></p></li>
+</ul>
+</section><div class="ad-slot"><!-- AdSense slot: set ADSENSE_CLIENT in build.py once approved --></div>
+  </div>
+</main>
+<footer class="site">
+  <div class="wrap">
+    <span>&copy; 2026 Ops Journal</span>
+    <span>
+      <a href="https://kabutoxyz.com/about/">About</a> &middot;
+      <a href="https://kabutoxyz.com/privacy/">Privacy</a> &middot;
+      <a href="https://kabutoxyz.com/terms/">Terms</a> &middot;
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </span>
+  </div>
+</footer>
+</body>
+</html>

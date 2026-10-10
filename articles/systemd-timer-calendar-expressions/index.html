@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>systemd calendar expressions: the two that catch everyone</title>
+<meta name="description" content="OnCalendar looks like cron but is not cron. Two expression shapes look correct, parse without error, and run at the wrong time.">
+<link rel="canonical" href="https://kabutoxyz.com/articles/systemd-timer-calendar-expressions/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="systemd calendar expressions: the two that catch everyone">
+<meta property="og:description" content="OnCalendar looks like cron but is not cron. Two expression shapes look correct, parse without error, and run at the wrong time.">
+<meta property="og:url" content="https://kabutoxyz.com/articles/systemd-timer-calendar-expressions/">
+<meta property="og:site_name" content="Ops Journal">
+<meta name="twitter:card" content="summary">
+<link rel="alternate" type="application/rss+xml" title="Ops Journal" href="https://kabutoxyz.com/feed.xml">
+<style>
+:root{
+  --bg:#fbfaf7; --panel:#ffffff; --ink:#1c1a17; --muted:#6b6459;
+  --line:#e5e0d6; --accent:#1f5f4b; --accent-soft:#eaf3ef;
+  --code-bg:#f4f1ea; --radius:10px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);
+  font-size:17px;line-height:1.65;
+}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-soft)}
+a:hover{border-bottom-color:var(--accent)}
+.wrap{max-width:760px;margin:0 auto;padding:0 20px}
+header.site{border-bottom:1px solid var(--line);background:var(--panel)}
+header.site .wrap{display:flex;align-items:baseline;justify-content:space-between;
+  gap:16px;padding-top:18px;padding-bottom:18px;flex-wrap:wrap}
+.brand{font-weight:700;font-size:1.05rem;letter-spacing:-.01em;border:none}
+.brand span{color:var(--muted);font-weight:400}
+nav.links a{margin-left:18px;font-size:.94rem;border:none;color:var(--muted)}
+nav.links a:hover{color:var(--accent)}
+main{padding:40px 0 64px}
+h1{font-size:1.85rem;line-height:1.25;letter-spacing:-.02em;margin:0 0 .5rem}
+h2{font-size:1.3rem;margin:2.2rem 0 .6rem;letter-spacing:-.01em}
+h3{font-size:1.08rem;margin:1.7rem 0 .4rem}
+p{margin:0 0 1.05rem}
+ul,ol{margin:0 0 1.05rem;padding-left:1.3rem}
+li{margin-bottom:.4rem}
+hr{border:none;border-top:1px solid var(--line);margin:2.4rem 0}
+blockquote{margin:1.4rem 0;padding:.2rem 0 .2rem 1rem;
+  border-left:3px solid var(--accent-soft);color:var(--muted)}
+code{font-family:var(--mono);font-size:.87em;background:var(--code-bg);
+  padding:.12em .38em;border-radius:5px}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px 16px;overflow-x:auto;margin:0 0 1.2rem}
+pre code{background:none;padding:0;font-size:.84rem;line-height:1.55}
+table{width:100%;border-collapse:collapse;margin:0 0 1.2rem;font-size:.94rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font-weight:600;background:var(--panel)}
+.meta{color:var(--muted);font-size:.9rem;margin-bottom:1.8rem}
+.lede{font-size:1.08rem;color:var(--muted);margin-bottom:2rem}
+.cards{list-style:none;padding:0;margin:0}
+.cards li{border-top:1px solid var(--line);padding:18px 0;margin:0}
+.cards li:first-child{border-top:none}
+.cards h3{margin:0 0 .3rem;font-size:1.12rem}
+.cards p{margin:0;color:var(--muted);font-size:.95rem}
+.related{margin-top:3rem;padding-top:1.6rem;border-top:1px solid var(--line)}
+.related h2{margin-top:0}
+.related .cards h3{font-size:1.02rem}
+.ad-slot{margin:2.4rem 0;min-height:1px}
+footer.site{border-top:1px solid var(--line);color:var(--muted);font-size:.88rem;
+  background:var(--panel)}
+footer.site .wrap{padding-top:24px;padding-bottom:28px;display:flex;
+  justify-content:space-between;gap:14px;flex-wrap:wrap}
+footer.site a{color:var(--muted);border:none}
+footer.site a:hover{color:var(--accent)}
+@media(max-width:600px){
+  body{font-size:16px}
+  h1{font-size:1.55rem}
+  nav.links a{margin-left:0;margin-right:16px}
+}
+</style>
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebSite", "@id": "https://kabutoxyz.com/#website", "url": "https://kabutoxyz.com/", "name": "Ops Journal", "description": "Field notes on Linux, backups, containers and monitoring, written by an engineer who runs the systems described here. Commands are run before they are written down."}, {"@type": "Organization", "@id": "https://kabutoxyz.com/#organization", "name": "Ops Journal", "url": "https://kabutoxyz.com/"}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "Article", "headline": "systemd calendar expressions: the two that catch everyone", "description": "OnCalendar looks like cron but is not cron. Two expression shapes look correct, parse without error, and run at the wrong time.", "datePublished": "2026-09-18", "dateModified": "2026-09-18", "inLanguage": "en", "url": "https://kabutoxyz.com/articles/systemd-timer-calendar-expressions/", "mainEntityOfPage": {"@type": "WebPage", "@id": "https://kabutoxyz.com/articles/systemd-timer-calendar-expressions/"}, "author": {"@type": "Organization", "name": "Ops Journal"}, "publisher": {"@type": "Organization", "name": "Ops Journal", "url": "https://kabutoxyz.com/"}, "keywords": "systemd, linux, scheduling"}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://kabutoxyz.com/"}, {"@type": "ListItem", "position": 2, "name": "Articles", "item": "https://kabutoxyz.com/articles/"}, {"@type": "ListItem", "position": 3, "name": "systemd calendar expressions: the two that catch everyone", "item": "https://kabutoxyz.com/articles/systemd-timer-calendar-expressions/"}]}</script>
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="https://kabutoxyz.com/">Ops Journal <span>&middot; Practical notes on running software in production</span></a>
+    <nav class="links">
+      <a href="https://kabutoxyz.com/">Articles</a>
+      <a href="https://kabutoxyz.com/about/">About</a>
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <div class="wrap">
+<article>
+<h1>systemd timer calendar expressions, and the two that catch everyone</h1>
+<p class="meta">Published 2026-09-18 · 7 min read</p>
+<p>systemd timers are a better cron in most ways: real logging, dependency
+handling, and a scheduler that will not silently skip a job because the machine
+was asleep. The cost is that <code>OnCalendar</code> syntax is its own language, and unlike
+cron it will happily accept an expression that means something other than what
+you intended.</p>
+<p>There is one tool that removes the guesswork. Learn it and the rest is detail:</p>
+<pre><code class="language-bash">systemd-analyze calendar &quot;Mon *-*-* 03:00:00&quot;
+</code></pre>
+<h2 id="always-verify-with-systemd-analyze-calendar">Always verify with systemd-analyze calendar</h2>
+<p>This subcommand parses an expression and tells you when it will next fire. It is
+the difference between hoping and knowing:</p>
+<pre><code class="language-bash">systemd-analyze calendar &quot;*-*-* 03:00:00&quot;
+</code></pre>
+<pre><code>Normalized form: *-*-* 03:00:00
+    Next elapse: Thu 2026-10-08 03:00:00 UTC
+       From now: 18h left
+</code></pre>
+<p>Two things are worth noticing in that output. First, the normalized form is shown
+back to you — if you typed something ambiguous, this is where you see what
+systemd decided it meant. Second, it tells you the timezone it used, which is
+UTC here because the machine is set to UTC. A timer that fires at 03:00 on a
+server set to UTC fires at 10:00 in Jakarta, and that mismatch has caused more
+"why did this run at the wrong time" tickets than any other cause.</p>
+<p>Set <code>Timezone=</code> on the timer explicitly when local time matters:</p>
+<pre><code class="language-ini">[Timer]
+OnCalendar=*-*-* 03:00:00
+Timezone=Asia/Jakarta
+</code></pre>
+<h2 id="trap-one-the-day-of-week-wildcard-that-is-not-a-wildcard">Trap one: the day-of-week wildcard that is not a wildcard</h2>
+<p>This is the one that gets people. Compare these two expressions:</p>
+<pre><code class="language-bash">systemd-analyze calendar &quot;*-*-* 03:00:00&quot;          # every day at 03:00
+systemd-analyze calendar &quot;Mon *-*-* 03:00:00&quot;      # every Monday at 03:00
+</code></pre>
+<p>The second returns:</p>
+<pre><code>Normalized form: Mon *-*-* 03:00:00
+    Next elapse: Mon 2026-10-12 03:00:00 UTC
+       From now: 4 days left
+</code></pre>
+<p>That looks right, and for a weekly job it is. The trap is the assumption that
+<code>Mon</code> combined with a wildcard day-of-month means "every Monday". It does not —
+it means Monday, on any day of the month, which for a weekly job is fine. Where
+it bites is when someone writes <code>Mon *-*-01</code> expecting the first Monday of the
+month, and instead gets Monday only when the 1st happens to be a Monday.</p>
+<p>To express "first Monday of the month" you have to combine a weekday with a
+day-of-month and understand that systemd ANDs them:</p>
+<pre><code class="language-ini"># Fires only when the 1st of the month is a Monday.
+OnCalendar=Mon *-*-01 03:00:00
+</code></pre>
+<p>That is rarely what anyone wants. The common requirement — "run weekly, on
+Monday" — is simply <code>Mon *-*-* 03:00:00</code>, and the day-of-month wildcard is doing
+exactly the right thing.</p>
+<h2 id="trap-two-the-missing-time-component">Trap two: the missing time component</h2>
+<p>An expression with no time is valid, and its meaning surprises people:</p>
+<pre><code class="language-bash">systemd-analyze calendar &quot;daily&quot;
+systemd-analyze calendar &quot;*-*-*&quot;
+</code></pre>
+<p>Both parse. <code>daily</code> normalizes to midnight, and <code>*-*-*</code> with no time also means
+midnight. Writing <code>OnCalendar=*-*-*</code> intending "once a day at some point" gives
+you 00:00:00 exactly, and if a dozen timers all do this you get a thundering herd
+at midnight. Always specify the time:</p>
+<pre><code class="language-ini">[Timer]
+OnCalendar=*-*-* 03:00:00
+</code></pre>
+<h2 id="a-complete-timer-with-the-parts-that-matter">A complete timer, with the parts that matter</h2>
+<pre><code class="language-ini"># /etc/systemd/system/backup.timer
+[Unit]
+Description=Nightly backup
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Timezone=Asia/Jakarta
+# If the machine was off at 03:00, run as soon as it comes up.
+Persistent=true
+# Spread load: run somewhere in the first 10 minutes after 03:00.
+RandomizedDelaySec=600
+Unit=backup.service
+
+[Install]
+WantedBy=timers.target
+</code></pre>
+<p><code>Persistent=true</code> is the line people forget, and it is the reason to move off
+cron in the first place. Without it, a timer whose time passed while the machine
+was down is simply skipped. With it, systemd records the last run time and fires
+the job on the next boot.</p>
+<p><code>RandomizedDelaySec</code> spreads the start time, which prevents every timer on a
+fleet from firing at the same second. On a single machine it is optional; across
+a fleet it is the difference between a smooth night and a load spike.</p>
+<h2 id="reloading-and-confirming">Reloading and confirming</h2>
+<p>After editing a timer:</p>
+<pre><code class="language-bash">sudo systemctl daemon-reload
+sudo systemctl enable --now backup.timer
+systemctl list-timers backup.timer
+</code></pre>
+<p><code>daemon-reload</code> is not optional — systemd caches unit files and will keep using
+the old definition until it re-reads them.</p>
+<p>To test the job itself without waiting for the schedule, run the service
+directly. This is also the quickest way to see the difference between a broken
+timer and a broken job:</p>
+<pre><code class="language-bash">sudo systemctl start backup.service
+systemctl status backup.service --no-pager
+journalctl -u backup.service -n 50 --no-pager
+</code></pre>
+<h2 id="checking-that-it-actually-ran-later">Checking that it actually ran, later</h2>
+<p><code>list-timers</code> shows the next and last run times, which is enough to spot a timer
+that stopped firing:</p>
+<pre><code class="language-bash">systemctl list-timers --all
+</code></pre>
+<p>The <code>LAST</code> column going stale is the earliest signal that something is wrong,
+usually a syntax error introduced in a later edit that made systemd drop the
+unit. <code>journalctl -u &lt;name&gt;.timer</code> will show the parse failure.</p>
+<h2 id="the-habit-worth-keeping">The habit worth keeping</h2>
+<p>Run <code>systemd-analyze calendar</code> on every expression before it goes into a file.
+It costs two seconds and it answers the only question that matters — when will
+this actually run — with a real date instead of your assumption.</p>
+</article>
+<section class="related">
+<h2>Related articles</h2>
+<ul class="cards">
+<li><h3><a href="https://kabutoxyz.com/articles/systemd-restart-policy-crash-loop/">Crash loops: reading systemd restart policies instead of guessing</a></h3><p>Restart=on-failure and StartLimitBurst decide whether a service recovers or dies. Read them from the running unit, not from the file you think is loaded. <span class="meta">&middot; 2026-10-07</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/var-log-disk-growth/">When /var/log eats the disk: finding what actually grew</a></h3><p>A full root filesystem is usually logs, not data. Here is how to find the real culprit in three commands and cap it so it stays capped. <span class="meta">&middot; 2026-09-12</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/honest-health-checks/">A health check that does not lie: checking the thing that can actually fail</a></h3><p>A check that returns 200 while the database is unreachable is worse than no check. Here is how to test the dependency, not the process. <span class="meta">&middot; 2026-10-03</span></p></li>
+</ul>
+</section><div class="ad-slot"><!-- AdSense slot: set ADSENSE_CLIENT in build.py once approved --></div>
+  </div>
+</main>
+<footer class="site">
+  <div class="wrap">
+    <span>&copy; 2026 Ops Journal</span>
+    <span>
+      <a href="https://kabutoxyz.com/about/">About</a> &middot;
+      <a href="https://kabutoxyz.com/privacy/">Privacy</a> &middot;
+      <a href="https://kabutoxyz.com/terms/">Terms</a> &middot;
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </span>
+  </div>
+</footer>
+</body>
+</html>

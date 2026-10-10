@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SSH host keys: what that SHA256 fingerprint identifies</title>
+<meta name="description" content="The fingerprint prompt is the one moment SSH authentication can be attacked. Knowing what is being compared turns it from a nuisance into a check.">
+<link rel="canonical" href="https://kabutoxyz.com/articles/ssh-host-key-fingerprints/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="SSH host keys: what that SHA256 fingerprint identifies">
+<meta property="og:description" content="The fingerprint prompt is the one moment SSH authentication can be attacked. Knowing what is being compared turns it from a nuisance into a check.">
+<meta property="og:url" content="https://kabutoxyz.com/articles/ssh-host-key-fingerprints/">
+<meta property="og:site_name" content="Ops Journal">
+<meta name="twitter:card" content="summary">
+<link rel="alternate" type="application/rss+xml" title="Ops Journal" href="https://kabutoxyz.com/feed.xml">
+<style>
+:root{
+  --bg:#fbfaf7; --panel:#ffffff; --ink:#1c1a17; --muted:#6b6459;
+  --line:#e5e0d6; --accent:#1f5f4b; --accent-soft:#eaf3ef;
+  --code-bg:#f4f1ea; --radius:10px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);
+  font-size:17px;line-height:1.65;
+}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-soft)}
+a:hover{border-bottom-color:var(--accent)}
+.wrap{max-width:760px;margin:0 auto;padding:0 20px}
+header.site{border-bottom:1px solid var(--line);background:var(--panel)}
+header.site .wrap{display:flex;align-items:baseline;justify-content:space-between;
+  gap:16px;padding-top:18px;padding-bottom:18px;flex-wrap:wrap}
+.brand{font-weight:700;font-size:1.05rem;letter-spacing:-.01em;border:none}
+.brand span{color:var(--muted);font-weight:400}
+nav.links a{margin-left:18px;font-size:.94rem;border:none;color:var(--muted)}
+nav.links a:hover{color:var(--accent)}
+main{padding:40px 0 64px}
+h1{font-size:1.85rem;line-height:1.25;letter-spacing:-.02em;margin:0 0 .5rem}
+h2{font-size:1.3rem;margin:2.2rem 0 .6rem;letter-spacing:-.01em}
+h3{font-size:1.08rem;margin:1.7rem 0 .4rem}
+p{margin:0 0 1.05rem}
+ul,ol{margin:0 0 1.05rem;padding-left:1.3rem}
+li{margin-bottom:.4rem}
+hr{border:none;border-top:1px solid var(--line);margin:2.4rem 0}
+blockquote{margin:1.4rem 0;padding:.2rem 0 .2rem 1rem;
+  border-left:3px solid var(--accent-soft);color:var(--muted)}
+code{font-family:var(--mono);font-size:.87em;background:var(--code-bg);
+  padding:.12em .38em;border-radius:5px}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px 16px;overflow-x:auto;margin:0 0 1.2rem}
+pre code{background:none;padding:0;font-size:.84rem;line-height:1.55}
+table{width:100%;border-collapse:collapse;margin:0 0 1.2rem;font-size:.94rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font-weight:600;background:var(--panel)}
+.meta{color:var(--muted);font-size:.9rem;margin-bottom:1.8rem}
+.lede{font-size:1.08rem;color:var(--muted);margin-bottom:2rem}
+.cards{list-style:none;padding:0;margin:0}
+.cards li{border-top:1px solid var(--line);padding:18px 0;margin:0}
+.cards li:first-child{border-top:none}
+.cards h3{margin:0 0 .3rem;font-size:1.12rem}
+.cards p{margin:0;color:var(--muted);font-size:.95rem}
+.related{margin-top:3rem;padding-top:1.6rem;border-top:1px solid var(--line)}
+.related h2{margin-top:0}
+.related .cards h3{font-size:1.02rem}
+.ad-slot{margin:2.4rem 0;min-height:1px}
+footer.site{border-top:1px solid var(--line);color:var(--muted);font-size:.88rem;
+  background:var(--panel)}
+footer.site .wrap{padding-top:24px;padding-bottom:28px;display:flex;
+  justify-content:space-between;gap:14px;flex-wrap:wrap}
+footer.site a{color:var(--muted);border:none}
+footer.site a:hover{color:var(--accent)}
+@media(max-width:600px){
+  body{font-size:16px}
+  h1{font-size:1.55rem}
+  nav.links a{margin-left:0;margin-right:16px}
+}
+</style>
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebSite", "@id": "https://kabutoxyz.com/#website", "url": "https://kabutoxyz.com/", "name": "Ops Journal", "description": "Field notes on Linux, backups, containers and monitoring, written by an engineer who runs the systems described here. Commands are run before they are written down."}, {"@type": "Organization", "@id": "https://kabutoxyz.com/#organization", "name": "Ops Journal", "url": "https://kabutoxyz.com/"}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "Article", "headline": "SSH host keys: what that SHA256 fingerprint identifies", "description": "The fingerprint prompt is the one moment SSH authentication can be attacked. Knowing what is being compared turns it from a nuisance into a check.", "datePublished": "2026-10-07", "dateModified": "2026-10-07", "inLanguage": "en", "url": "https://kabutoxyz.com/articles/ssh-host-key-fingerprints/", "mainEntityOfPage": {"@type": "WebPage", "@id": "https://kabutoxyz.com/articles/ssh-host-key-fingerprints/"}, "author": {"@type": "Organization", "name": "Ops Journal"}, "publisher": {"@type": "Organization", "name": "Ops Journal", "url": "https://kabutoxyz.com/"}, "keywords": "ssh, security, linux"}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://kabutoxyz.com/"}, {"@type": "ListItem", "position": 2, "name": "Articles", "item": "https://kabutoxyz.com/articles/"}, {"@type": "ListItem", "position": 3, "name": "SSH host keys: what that SHA256 fingerprint identifies", "item": "https://kabutoxyz.com/articles/ssh-host-key-fingerprints/"}]}</script>
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="https://kabutoxyz.com/">Ops Journal <span>&middot; Practical notes on running software in production</span></a>
+    <nav class="links">
+      <a href="https://kabutoxyz.com/">Articles</a>
+      <a href="https://kabutoxyz.com/about/">About</a>
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <div class="wrap">
+<article>
+<h1>SSH host keys: what that SHA256 fingerprint actually identifies</h1>
+<p class="meta">Published 2026-10-07 · 7 min read</p>
+<p>The first time you connect to a host, SSH shows a fingerprint and asks whether
+to trust it. Most people type yes. That prompt is the only point in the
+connection where the identity of the server is established, so it is worth
+understanding what is being compared and what it protects against.</p>
+<h2 id="the-fingerprint-identifies-a-key-not-a-host">The fingerprint identifies a key, not a host</h2>
+<p>A server has one or more host keys, one per algorithm, generated when SSH was
+first set up. The fingerprint is a hash of the public half of one of those keys.
+It says nothing about the hostname, the IP, or the machine's identity in any
+other sense — it identifies a specific key pair.</p>
+<p>List the host keys on a machine you have access to:</p>
+<pre><code class="language-bash">ls -l /etc/ssh/ssh_host_*_key.pub
+</code></pre>
+<p>A typical result is three or four files, one for each algorithm the server
+offers: <code>ed25519</code>, <code>rsa</code>, <code>ecdsa</code>, and possibly <code>dsa</code>. Modern OpenSSH generates
+ed25519 and rsa by default.</p>
+<h2 id="reading-a-fingerprint">Reading a fingerprint</h2>
+<p><code>ssh-keygen -lf</code> prints the fingerprint of a public key file:</p>
+<pre><code class="language-bash">ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
+</code></pre>
+<pre><code>256 SHA256:+7+QJiOKPZDSunXEnfE89SIVSSUsLT2OFPRu520xGAE root@fakher-prd2e (ED25519)
+</code></pre>
+<p>Four fields, each meaningful:</p>
+<ul>
+<li><code>256</code> — the key size in bits</li>
+<li><code>SHA256:+7+QJ...</code> — the fingerprint, base64-encoded SHA256 of the key</li>
+<li><code>root@fakher-prd2e</code> — the comment, usually <code>user@host</code> from generation time</li>
+<li><code>(ED25519)</code> — the algorithm</li>
+</ul>
+<p>The comment is not part of the key and not part of the fingerprint. It is free
+text, and on a host key it frequently records whoever generated it. Do not treat
+it as authoritative — a copied key can carry any comment.</p>
+<p>Older documentation shows fingerprints as colon-separated hex
+(<code>c3:1a:...</code>). That is the MD5 format, and OpenSSH no longer prints it by
+default because MD5 collisions are practical. If you need to compare against an
+old record, ask for it explicitly:</p>
+<pre><code class="language-bash">ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E md5
+</code></pre>
+<p>Prefer comparing SHA256 fingerprints. Converting an MD5 record to SHA256 is not
+possible — they are different hashes of the same key, so the old record has to
+be regenerated.</p>
+<h2 id="getting-the-fingerprint-of-a-remote-host-without-connecting">Getting the fingerprint of a remote host without connecting</h2>
+<p>The useful trick is querying a host's keys before you have ever connected, so
+you can compare against a value obtained through another channel:</p>
+<pre><code class="language-bash">ssh-keyscan -t ed25519 host.example.com 2&gt;/dev/null | ssh-keygen -lf -
+</code></pre>
+<p><code>ssh-keyscan</code> retrieves the public keys the server offers, and piping into
+<code>ssh-keygen -lf -</code> prints their fingerprints. This is the command to run when you
+want to verify a host before adding it to <code>known_hosts</code>.</p>
+<p>It comes with a caveat worth stating plainly: <code>ssh-keyscan</code> is itself an
+unauthenticated request. If the network is already compromised, the keys it
+returns are the attacker's, and comparing them proves nothing. Verification only
+has value when the expected value comes from a different channel — a printed
+record, a configuration management system, a colleague reading it off the
+console.</p>
+<h2 id="where-the-trust-decision-is-stored">Where the trust decision is stored</h2>
+<p>When you accept a host key, it is written to <code>known_hosts</code>:</p>
+<pre><code class="language-bash">grep host.example.com ~/.ssh/known_hosts
+</code></pre>
+<p>A line contains the hostname (or hashed hostname), the algorithm, and the
+base64 public key. With <code>HashKnownHosts yes</code>, the hostname is hashed, which is
+why <code>grep</code> for a hostname may find nothing even though the entry exists. To look
+it up in that case, ask SSH to do it:</p>
+<pre><code class="language-bash">ssh-keygen -F host.example.com
+</code></pre>
+<p><code>-F</code> finds a host in <code>known_hosts</code> regardless of whether the names are hashed.
+<code>ssh-keygen -R host.example.com</code> removes the entry, which is the correct action
+after a legitimate server rebuild.</p>
+<h2 id="the-warning-that-means-what-it-says">The warning that means what it says</h2>
+<pre><code>@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+</code></pre>
+<p>This appears when the key presented does not match the one recorded. It has two
+possible causes and they need different responses:</p>
+<ul>
+<li><strong>The host was rebuilt or rekeyed.</strong> Legitimate. The fix is
+  <code>ssh-keygen -R host</code> followed by reconnecting and accepting the new key.</li>
+<li><strong>Something is intercepting the connection.</strong> The host key changed because you
+  are talking to a different machine. Removing the entry and reconnecting is
+  exactly the wrong response.</li>
+</ul>
+<p>The way to tell them apart is to obtain the current fingerprint out of band — the
+cloud console, the hypervisor, a colleague on the host — and compare. When that
+is not possible, treat the change as hostile until proven otherwise, because the
+costs are asymmetric: an unnecessary five minutes of checking against a
+successfully intercepted session.</p>
+<h2 id="verifying-a-fingerprint-you-were-given">Verifying a fingerprint you were given</h2>
+<p>When someone hands you a fingerprint to compare, match the whole string. A
+common mistake is checking only the first few characters, which is not what the
+prompt asks and not a meaningful check — the security of the comparison comes
+from the full hash.</p>
+<pre><code class="language-bash"># the value to compare is the whole SHA256:... field, not a prefix
+ssh-keyscan -t ed25519 host.example.com 2&gt;/dev/null | ssh-keygen -lf -
+</code></pre>
+<h2 id="managing-this-across-many-hosts">Managing this across many hosts</h2>
+<p>For anything beyond a handful of machines, verifying fingerprints by hand does
+not scale and will not happen. The two approaches that do:</p>
+<ul>
+<li><strong>Provision the keys.</strong> Bake the expected host keys into the image or
+  configuration management, so the client trusts them from first boot with no
+  prompt and no human decision in the loop.</li>
+<li><strong>Certificates.</strong> Use an SSH certificate authority. The client trusts the CA
+  once, and the CA signs host keys with a validity period. Host identity is then
+  verified against a signature rather than a stored fingerprint, and rotation
+  stops requiring a change on every client.</li>
+</ul>
+<p>For a single server the manual check is fine. For a fleet, one of the two above
+is the difference between a policy that exists and a policy that is followed.</p>
+</article>
+<section class="related">
+<h2>Related articles</h2>
+<ul class="cards">
+<li><h3><a href="https://kabutoxyz.com/articles/var-log-disk-growth/">When /var/log eats the disk: finding what actually grew</a></h3><p>A full root filesystem is usually logs, not data. Here is how to find the real culprit in three commands and cap it so it stays capped. <span class="meta">&middot; 2026-09-12</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/systemd-timer-calendar-expressions/">systemd timer calendar expressions, and the two that catch everyone</a></h3><p>OnCalendar looks like cron but is not cron. Two expression shapes look correct, parse without error, and run at the wrong time. <span class="meta">&middot; 2026-09-18</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/find-process-holding-port/">Finding which process is holding a port, and why kill does not always free it</a></h3><p>Address already in use is a symptom, not a diagnosis. Here is how to find the real owner of a port and why it sometimes refuses to release. <span class="meta">&middot; 2026-10-05</span></p></li>
+</ul>
+</section><div class="ad-slot"><!-- AdSense slot: set ADSENSE_CLIENT in build.py once approved --></div>
+  </div>
+</main>
+<footer class="site">
+  <div class="wrap">
+    <span>&copy; 2026 Ops Journal</span>
+    <span>
+      <a href="https://kabutoxyz.com/about/">About</a> &middot;
+      <a href="https://kabutoxyz.com/privacy/">Privacy</a> &middot;
+      <a href="https://kabutoxyz.com/terms/">Terms</a> &middot;
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </span>
+  </div>
+</footer>
+</body>
+</html>

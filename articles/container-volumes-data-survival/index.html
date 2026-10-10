@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What survives a container rebuild: volumes and data</title>
+<meta name="description" content="Rebuilding a container is routine until it takes the data with it. Here is which storage survives, which does not, and how to check first.">
+<link rel="canonical" href="https://kabutoxyz.com/articles/container-volumes-data-survival/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="What survives a container rebuild: volumes and data">
+<meta property="og:description" content="Rebuilding a container is routine until it takes the data with it. Here is which storage survives, which does not, and how to check first.">
+<meta property="og:url" content="https://kabutoxyz.com/articles/container-volumes-data-survival/">
+<meta property="og:site_name" content="Ops Journal">
+<meta name="twitter:card" content="summary">
+<link rel="alternate" type="application/rss+xml" title="Ops Journal" href="https://kabutoxyz.com/feed.xml">
+<style>
+:root{
+  --bg:#fbfaf7; --panel:#ffffff; --ink:#1c1a17; --muted:#6b6459;
+  --line:#e5e0d6; --accent:#1f5f4b; --accent-soft:#eaf3ef;
+  --code-bg:#f4f1ea; --radius:10px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);
+  font-size:17px;line-height:1.65;
+}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-soft)}
+a:hover{border-bottom-color:var(--accent)}
+.wrap{max-width:760px;margin:0 auto;padding:0 20px}
+header.site{border-bottom:1px solid var(--line);background:var(--panel)}
+header.site .wrap{display:flex;align-items:baseline;justify-content:space-between;
+  gap:16px;padding-top:18px;padding-bottom:18px;flex-wrap:wrap}
+.brand{font-weight:700;font-size:1.05rem;letter-spacing:-.01em;border:none}
+.brand span{color:var(--muted);font-weight:400}
+nav.links a{margin-left:18px;font-size:.94rem;border:none;color:var(--muted)}
+nav.links a:hover{color:var(--accent)}
+main{padding:40px 0 64px}
+h1{font-size:1.85rem;line-height:1.25;letter-spacing:-.02em;margin:0 0 .5rem}
+h2{font-size:1.3rem;margin:2.2rem 0 .6rem;letter-spacing:-.01em}
+h3{font-size:1.08rem;margin:1.7rem 0 .4rem}
+p{margin:0 0 1.05rem}
+ul,ol{margin:0 0 1.05rem;padding-left:1.3rem}
+li{margin-bottom:.4rem}
+hr{border:none;border-top:1px solid var(--line);margin:2.4rem 0}
+blockquote{margin:1.4rem 0;padding:.2rem 0 .2rem 1rem;
+  border-left:3px solid var(--accent-soft);color:var(--muted)}
+code{font-family:var(--mono);font-size:.87em;background:var(--code-bg);
+  padding:.12em .38em;border-radius:5px}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px 16px;overflow-x:auto;margin:0 0 1.2rem}
+pre code{background:none;padding:0;font-size:.84rem;line-height:1.55}
+table{width:100%;border-collapse:collapse;margin:0 0 1.2rem;font-size:.94rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font-weight:600;background:var(--panel)}
+.meta{color:var(--muted);font-size:.9rem;margin-bottom:1.8rem}
+.lede{font-size:1.08rem;color:var(--muted);margin-bottom:2rem}
+.cards{list-style:none;padding:0;margin:0}
+.cards li{border-top:1px solid var(--line);padding:18px 0;margin:0}
+.cards li:first-child{border-top:none}
+.cards h3{margin:0 0 .3rem;font-size:1.12rem}
+.cards p{margin:0;color:var(--muted);font-size:.95rem}
+.related{margin-top:3rem;padding-top:1.6rem;border-top:1px solid var(--line)}
+.related h2{margin-top:0}
+.related .cards h3{font-size:1.02rem}
+.ad-slot{margin:2.4rem 0;min-height:1px}
+footer.site{border-top:1px solid var(--line);color:var(--muted);font-size:.88rem;
+  background:var(--panel)}
+footer.site .wrap{padding-top:24px;padding-bottom:28px;display:flex;
+  justify-content:space-between;gap:14px;flex-wrap:wrap}
+footer.site a{color:var(--muted);border:none}
+footer.site a:hover{color:var(--accent)}
+@media(max-width:600px){
+  body{font-size:16px}
+  h1{font-size:1.55rem}
+  nav.links a{margin-left:0;margin-right:16px}
+}
+</style>
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebSite", "@id": "https://kabutoxyz.com/#website", "url": "https://kabutoxyz.com/", "name": "Ops Journal", "description": "Field notes on Linux, backups, containers and monitoring, written by an engineer who runs the systems described here. Commands are run before they are written down."}, {"@type": "Organization", "@id": "https://kabutoxyz.com/#organization", "name": "Ops Journal", "url": "https://kabutoxyz.com/"}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "Article", "headline": "What survives a container rebuild: volumes and data", "description": "Rebuilding a container is routine until it takes the data with it. Here is which storage survives, which does not, and how to check first.", "datePublished": "2026-09-29", "dateModified": "2026-09-29", "inLanguage": "en", "url": "https://kabutoxyz.com/articles/container-volumes-data-survival/", "mainEntityOfPage": {"@type": "WebPage", "@id": "https://kabutoxyz.com/articles/container-volumes-data-survival/"}, "author": {"@type": "Organization", "name": "Ops Journal"}, "publisher": {"@type": "Organization", "name": "Ops Journal", "url": "https://kabutoxyz.com/"}, "keywords": "docker, containers, storage"}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://kabutoxyz.com/"}, {"@type": "ListItem", "position": 2, "name": "Articles", "item": "https://kabutoxyz.com/articles/"}, {"@type": "ListItem", "position": 3, "name": "What survives a container rebuild: volumes and data", "item": "https://kabutoxyz.com/articles/container-volumes-data-survival/"}]}</script>
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="https://kabutoxyz.com/">Ops Journal <span>&middot; Practical notes on running software in production</span></a>
+    <nav class="links">
+      <a href="https://kabutoxyz.com/">Articles</a>
+      <a href="https://kabutoxyz.com/about/">About</a>
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <div class="wrap">
+<article>
+<h1>What actually survives a container rebuild: volumes, mounts and the data people lose</h1>
+<p class="meta">Published 2026-09-29 · 8 min read</p>
+<p>The first time a container rebuild destroys data, it is usually a surprise,
+because the files were right there in the running container. Understanding why
+they vanished comes down to one distinction: what is stored in the container's
+writable layer, and what is stored outside it.</p>
+<h2 id="the-writable-layer-is-disposable-by-design">The writable layer is disposable, by design</h2>
+<p>Everything written inside a container that is not on a volume or bind mount lives
+in the container's own writable layer. That layer is tied to the container's
+identity. Remove the container and the layer goes with it. Recreate it from the
+same image and you get a fresh, empty layer.</p>
+<p>This is not a bug. It is what makes containers replaceable. The consequence is
+that any state you care about must live somewhere that outlives the container.</p>
+<p>There are three places it can live:</p>
+<table>
+<thead>
+<tr>
+<th>Kind</th>
+<th>Survives <code>docker rm</code></th>
+<th>Survives <code>docker compose up --build</code></th>
+<th>Managed by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Writable layer</td>
+<td>no</td>
+<td>no</td>
+<td>the container</td>
+</tr>
+<tr>
+<td>Named volume</td>
+<td>yes</td>
+<td>yes</td>
+<td>Docker</td>
+</tr>
+<tr>
+<td>Bind mount</td>
+<td>yes</td>
+<td>yes</td>
+<td>you</td>
+</tr>
+<tr>
+<td>Anonymous volume</td>
+<td>yes, if not pruned</td>
+<td>yes</td>
+<td>Docker, unnamed</td>
+</tr>
+</tbody>
+</table>
+<h2 id="checking-what-a-running-container-actually-uses">Checking what a running container actually uses</h2>
+<p>Before rebuilding anything, look at how the container is wired:</p>
+<pre><code class="language-bash">docker inspect --format '{{json .Mounts}}' myapp | python3 -m json.tool
+</code></pre>
+<p>The <code>Mounts</code> array lists every mount with its <code>Type</code> (<code>volume</code> or <code>bind</code>), its
+<code>Source</code> on the host, and its <code>Destination</code> in the container. If the path your
+application writes to does not appear in that list, its data is in the writable
+layer and will not survive the rebuild.</p>
+<p>A quicker first pass, which is enough to spot the common case of a container with
+no mounts at all:</p>
+<pre><code class="language-bash">docker inspect --format '{{.Name}}: {{len .Mounts}} mounts' $(docker ps -q)
+</code></pre>
+<h2 id="named-volumes-are-the-safe-default">Named volumes are the safe default</h2>
+<p>A named volume is created and owned by Docker, and it persists until you
+explicitly remove it:</p>
+<pre><code class="language-bash">docker volume ls
+docker volume inspect myapp_data
+</code></pre>
+<p><code>docker volume inspect</code> prints the host path under <code>Mountpoint</code>. On Linux that is
+typically <code>/var/lib/docker/volumes/myapp_data/_data</code>, and being able to see it is
+useful for the next step — confirming the data is actually there before you tear
+anything down.</p>
+<p>Two commands remove volumes, and both are destructive:</p>
+<pre><code class="language-bash">docker rm -v myapp            # removes the container and its anonymous volumes
+docker compose down -v        # removes the project's volumes
+</code></pre>
+<p>The <code>-v</code> flag is the one that surprises people in compose. <code>docker compose down</code>
+on its own leaves named volumes alone; add <code>-v</code> and the database volume is gone.
+It is common to find <code>-v</code> in a script written by someone debugging, and it is
+worth grepping your scripts for it:</p>
+<pre><code class="language-bash">grep -rn &quot;compose down&quot; --include='*.sh' .
+</code></pre>
+<h2 id="bind-mounts-are-explicit-but-easy-to-get-subtly-wrong">Bind mounts are explicit but easy to get subtly wrong</h2>
+<p>A bind mount maps a host path into the container:</p>
+<pre><code class="language-yaml">services:
+  app:
+    volumes:
+      - ./data:/app/data
+</code></pre>
+<p>The data lives at <code>./data</code> relative to the compose file, so it survives
+everything. The subtle failure is the path: <code>./data</code> is relative to the compose
+file's directory, not the directory you ran the command from. Run compose with
+<code>-f /srv/app/docker-compose.yml</code> from elsewhere and the relative path still
+resolves correctly, but a path typed by hand into a <code>docker run -v</code> does not —
+<code>docker run -v data:/app/data</code> creates a <em>named volume</em> called <code>data</code>, not a bind
+mount to a directory called <code>data</code>.</p>
+<p>The tell is in <code>docker inspect</code>: a bind mount shows an absolute <code>Source</code> path, a
+named volume shows a name.</p>
+<h2 id="anonymous-volumes-and-why-they-accumulate">Anonymous volumes, and why they accumulate</h2>
+<p>A <code>VOLUME</code> instruction in a Dockerfile, or a <code>-v /app/data</code> with no host side,
+creates an anonymous volume with a random name. It survives container removal,
+which is deliberate — the intent is that <code>docker run --rm</code> on the same image
+reuses it. But nothing tracks which container it belonged to once the container
+is gone, so they accumulate:</p>
+<pre><code class="language-bash">docker volume ls -qf dangling=true
+</code></pre>
+<p>Those are volumes no container references. Pruning them is where data loss
+actually happens:</p>
+<pre><code class="language-bash"># destroys every unreferenced volume -- read the list first
+docker volume prune
+</code></pre>
+<p>Always run the <code>-qf dangling=true</code> listing first and read it. A volume that looks
+dangling may be the one a stopped container needs, and <code>docker volume prune</code>
+does not ask twice.</p>
+<h2 id="proving-the-data-is-where-you-think-before-a-rebuild">Proving the data is where you think before a rebuild</h2>
+<p>The habit that prevents the incident: before any rebuild, confirm the data is
+present at the mount's host path.</p>
+<pre><code class="language-bash"># find the mountpoint of a named volume
+MP=$(docker volume inspect myapp_data --format '{{.Mountpoint}}')
+sudo ls -la &quot;$MP&quot; | head
+</code></pre>
+<p>If that directory is empty and your application claims to have written data, the
+writes are going into the writable layer and the next rebuild will lose them.</p>
+<h2 id="backing-up-a-volume-properly">Backing up a volume properly</h2>
+<p>Copying files out of a volume is best done with a throwaway container that mounts
+it, rather than reaching into <code>/var/lib/docker</code> directly — the latter bypasses
+Docker's locking and can capture a torn view of a database volume:</p>
+<pre><code class="language-bash">docker run --rm \
+  -v myapp_data:/data:ro \
+  -v &quot;$PWD&quot;:/backup \
+  alpine tar -czf /backup/myapp_data.tar.gz -C /data .
+</code></pre>
+<p>The <code>:ro</code> matters: mounting read-only means the backup cannot corrupt the source,
+and it makes the intent explicit to anyone reading the command later.</p>
+<h2 id="the-short-version">The short version</h2>
+<p>Check <code>docker inspect</code> for the mount before rebuilding, never run
+<code>compose down -v</code> or <code>volume prune</code> without reading the list first, and put
+anything you cannot afford to lose on a named volume or a bind mount with an
+absolute path. The rebuild itself is safe; it is the cleanup commands around it
+that destroy data.</p>
+</article>
+<section class="related">
+<h2>Related articles</h2>
+<ul class="cards">
+<li><h3><a href="https://kabutoxyz.com/articles/file-descriptor-leak/">Too many open files: finding a file descriptor leak before it takes the service down</a></h3><p>EMFILE arrives long before the crash. Reading the per-process limits and counting open descriptors shows which service is leaking and how fast. <span class="meta">&middot; 2026-10-07</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/ssh-host-key-fingerprints/">SSH host keys: what that SHA256 fingerprint actually identifies</a></h3><p>The fingerprint prompt is the one moment SSH authentication can be attacked. Knowing what is being compared turns it from a nuisance into a check. <span class="meta">&middot; 2026-10-07</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/systemd-restart-policy-crash-loop/">Crash loops: reading systemd restart policies instead of guessing</a></h3><p>Restart=on-failure and StartLimitBurst decide whether a service recovers or dies. Read them from the running unit, not from the file you think is loaded. <span class="meta">&middot; 2026-10-07</span></p></li>
+</ul>
+</section><div class="ad-slot"><!-- AdSense slot: set ADSENSE_CLIENT in build.py once approved --></div>
+  </div>
+</main>
+<footer class="site">
+  <div class="wrap">
+    <span>&copy; 2026 Ops Journal</span>
+    <span>
+      <a href="https://kabutoxyz.com/about/">About</a> &middot;
+      <a href="https://kabutoxyz.com/privacy/">Privacy</a> &middot;
+      <a href="https://kabutoxyz.com/terms/">Terms</a> &middot;
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </span>
+  </div>
+</footer>
+</body>
+</html>

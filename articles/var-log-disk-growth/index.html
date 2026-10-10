@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>When /var/log eats the disk: finding what actually grew</title>
+<meta name="description" content="A full root filesystem is usually logs, not data. Here is how to find the real culprit in three commands and cap it so it stays capped.">
+<link rel="canonical" href="https://kabutoxyz.com/articles/var-log-disk-growth/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="When /var/log eats the disk: finding what actually grew">
+<meta property="og:description" content="A full root filesystem is usually logs, not data. Here is how to find the real culprit in three commands and cap it so it stays capped.">
+<meta property="og:url" content="https://kabutoxyz.com/articles/var-log-disk-growth/">
+<meta property="og:site_name" content="Ops Journal">
+<meta name="twitter:card" content="summary">
+<link rel="alternate" type="application/rss+xml" title="Ops Journal" href="https://kabutoxyz.com/feed.xml">
+<style>
+:root{
+  --bg:#fbfaf7; --panel:#ffffff; --ink:#1c1a17; --muted:#6b6459;
+  --line:#e5e0d6; --accent:#1f5f4b; --accent-soft:#eaf3ef;
+  --code-bg:#f4f1ea; --radius:10px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);
+  font-size:17px;line-height:1.65;
+}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-soft)}
+a:hover{border-bottom-color:var(--accent)}
+.wrap{max-width:760px;margin:0 auto;padding:0 20px}
+header.site{border-bottom:1px solid var(--line);background:var(--panel)}
+header.site .wrap{display:flex;align-items:baseline;justify-content:space-between;
+  gap:16px;padding-top:18px;padding-bottom:18px;flex-wrap:wrap}
+.brand{font-weight:700;font-size:1.05rem;letter-spacing:-.01em;border:none}
+.brand span{color:var(--muted);font-weight:400}
+nav.links a{margin-left:18px;font-size:.94rem;border:none;color:var(--muted)}
+nav.links a:hover{color:var(--accent)}
+main{padding:40px 0 64px}
+h1{font-size:1.85rem;line-height:1.25;letter-spacing:-.02em;margin:0 0 .5rem}
+h2{font-size:1.3rem;margin:2.2rem 0 .6rem;letter-spacing:-.01em}
+h3{font-size:1.08rem;margin:1.7rem 0 .4rem}
+p{margin:0 0 1.05rem}
+ul,ol{margin:0 0 1.05rem;padding-left:1.3rem}
+li{margin-bottom:.4rem}
+hr{border:none;border-top:1px solid var(--line);margin:2.4rem 0}
+blockquote{margin:1.4rem 0;padding:.2rem 0 .2rem 1rem;
+  border-left:3px solid var(--accent-soft);color:var(--muted)}
+code{font-family:var(--mono);font-size:.87em;background:var(--code-bg);
+  padding:.12em .38em;border-radius:5px}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px 16px;overflow-x:auto;margin:0 0 1.2rem}
+pre code{background:none;padding:0;font-size:.84rem;line-height:1.55}
+table{width:100%;border-collapse:collapse;margin:0 0 1.2rem;font-size:.94rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font-weight:600;background:var(--panel)}
+.meta{color:var(--muted);font-size:.9rem;margin-bottom:1.8rem}
+.lede{font-size:1.08rem;color:var(--muted);margin-bottom:2rem}
+.cards{list-style:none;padding:0;margin:0}
+.cards li{border-top:1px solid var(--line);padding:18px 0;margin:0}
+.cards li:first-child{border-top:none}
+.cards h3{margin:0 0 .3rem;font-size:1.12rem}
+.cards p{margin:0;color:var(--muted);font-size:.95rem}
+.related{margin-top:3rem;padding-top:1.6rem;border-top:1px solid var(--line)}
+.related h2{margin-top:0}
+.related .cards h3{font-size:1.02rem}
+.ad-slot{margin:2.4rem 0;min-height:1px}
+footer.site{border-top:1px solid var(--line);color:var(--muted);font-size:.88rem;
+  background:var(--panel)}
+footer.site .wrap{padding-top:24px;padding-bottom:28px;display:flex;
+  justify-content:space-between;gap:14px;flex-wrap:wrap}
+footer.site a{color:var(--muted);border:none}
+footer.site a:hover{color:var(--accent)}
+@media(max-width:600px){
+  body{font-size:16px}
+  h1{font-size:1.55rem}
+  nav.links a{margin-left:0;margin-right:16px}
+}
+</style>
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebSite", "@id": "https://kabutoxyz.com/#website", "url": "https://kabutoxyz.com/", "name": "Ops Journal", "description": "Field notes on Linux, backups, containers and monitoring, written by an engineer who runs the systems described here. Commands are run before they are written down."}, {"@type": "Organization", "@id": "https://kabutoxyz.com/#organization", "name": "Ops Journal", "url": "https://kabutoxyz.com/"}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "Article", "headline": "When /var/log eats the disk: finding what actually grew", "description": "A full root filesystem is usually logs, not data. Here is how to find the real culprit in three commands and cap it so it stays capped.", "datePublished": "2026-09-12", "dateModified": "2026-09-12", "inLanguage": "en", "url": "https://kabutoxyz.com/articles/var-log-disk-growth/", "mainEntityOfPage": {"@type": "WebPage", "@id": "https://kabutoxyz.com/articles/var-log-disk-growth/"}, "author": {"@type": "Organization", "name": "Ops Journal"}, "publisher": {"@type": "Organization", "name": "Ops Journal", "url": "https://kabutoxyz.com/"}, "keywords": "linux, logs, disk"}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://kabutoxyz.com/"}, {"@type": "ListItem", "position": 2, "name": "Articles", "item": "https://kabutoxyz.com/articles/"}, {"@type": "ListItem", "position": 3, "name": "When /var/log eats the disk: finding what actually grew", "item": "https://kabutoxyz.com/articles/var-log-disk-growth/"}]}</script>
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="https://kabutoxyz.com/">Ops Journal <span>&middot; Practical notes on running software in production</span></a>
+    <nav class="links">
+      <a href="https://kabutoxyz.com/">Articles</a>
+      <a href="https://kabutoxyz.com/about/">About</a>
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <div class="wrap">
+<article>
+<h1>When /var/log eats the disk: finding what actually grew</h1>
+<p class="meta">Published 2026-09-12 · 8 min read</p>
+<p>A server that has run for a year without attention will eventually page you with
+<code>No space left on device</code>. The instinct is to look for a runaway application
+writing data files. In practice, on a machine that only runs services and their
+logs, the log directory is the answer far more often than not.</p>
+<h2 id="start-with-the-top-level-split">Start with the top-level split</h2>
+<p>Resist the urge to run a recursive <code>du</code> over the whole filesystem. It walks
+every file and on a busy box takes minutes, while the answer is usually visible
+one level down:</p>
+<pre><code class="language-bash">du -xhd1 /var | sort -rh | head -6
+</code></pre>
+<p>On the machine this was written on:</p>
+<pre><code>3.6G    /var
+3.0G    /var/log
+352M    /var/cache
+254M    /var/lib
+2.2M    /var/backups
+</code></pre>
+<p><code>-x</code> keeps the walk on one filesystem, which matters when <code>/var/lib/docker</code> or a
+database directory is a separate mount — without it, <code>du</code> descends into those and
+reports sizes that have nothing to do with the disk that is actually full. <code>-d1</code>
+limits depth to one level, and <code>sort -rh</code> puts the largest first.</p>
+<p><code>/var/log</code> at 3.0G out of 3.6G is the whole story. Now find out which writer owns
+it.</p>
+<h2 id="separate-the-journal-from-plain-log-files">Separate the journal from plain log files</h2>
+<p>Since systemd took over logging, <code>/var/log</code> holds two different things that need
+different fixes: the binary journal under <code>/var/log/journal</code>, and traditional
+text files written by rsyslog, nginx, or application daemons.</p>
+<pre><code class="language-bash">du -xhd1 /var/log | sort -rh | head -8
+</code></pre>
+<p>The journal's own accounting is more reliable than reading the directory size,
+because the journal can be capped and will report the cap:</p>
+<pre><code class="language-bash">journalctl --disk-usage
+</code></pre>
+<p>If you are not in the <code>adm</code> or <code>systemd-journal</code> group you will get a notice
+saying you cannot see other users' messages, and the number reported may be
+smaller than reality. Run it with <code>sudo</code> when you want the real figure:</p>
+<pre><code class="language-bash">sudo journalctl --disk-usage
+</code></pre>
+<h2 id="the-journal-is-the-usual-suspect-and-it-has-a-limit-you-have-not-set">The journal is the usual suspect, and it has a limit you have not set</h2>
+<p>By default the journal grows until it hits a percentage of the filesystem
+(<code>SystemMaxUse</code> defaults to 10% of the filesystem size, capped at 4G). On a
+232G disk that ceiling is 4G, which is enough to be a problem and not enough to
+be obvious.</p>
+<p>Check the current cap and what is actually in use:</p>
+<pre><code class="language-bash">sudo journalctl --disk-usage
+grep -E '^\s*SystemMaxUse|^\s*MaxRetentionSec' /etc/systemd/journald.conf
+</code></pre>
+<p>If both lines are commented out, the defaults apply and nothing is holding the
+journal down. Set an explicit ceiling in <code>/etc/systemd/journald.conf</code>:</p>
+<pre><code class="language-ini">[Journal]
+SystemMaxUse=500M
+SystemKeepFree=1G
+MaxRetentionSec=1month
+</code></pre>
+<p><code>SystemKeepFree</code> is the more important of the two on a small disk: it tells the
+journal to leave at least that much space free regardless of <code>SystemMaxUse</code>. Then
+apply it without waiting for a restart:</p>
+<pre><code class="language-bash">sudo systemctl restart systemd-journald
+</code></pre>
+<p>Note that restarting <code>systemd-journald</code> does not delete anything. The cap is
+enforced when new entries arrive, so the journal shrinks as it rotates rather
+than immediately. To reclaim space now, vacuum explicitly:</p>
+<pre><code class="language-bash"># keep the last two weeks
+sudo journalctl --vacuum-time=2weeks
+
+# or cap the total size
+sudo journalctl --vacuum-size=500M
+</code></pre>
+<p><code>--vacuum-time</code> and <code>--vacuum-size</code> both delete archived journal files. They do
+not touch the currently active file, so you may free less than you expect in one
+pass; run it twice if the number barely moved.</p>
+<h2 id="text-logs-need-logrotate-and-logrotate-needs-to-be-running">Text logs need logrotate, and logrotate needs to be running</h2>
+<p>Text files under <code>/var/log</code> are rotated by <code>logrotate</code>, which on modern Ubuntu is
+driven by a systemd timer rather than a cron job. Confirm it is actually firing:</p>
+<pre><code class="language-bash">systemctl list-timers logrotate.timer
+</code></pre>
+<p>If the <code>LAST</code> column is days old, rotation has stopped and every file will grow
+without bound. The two causes worth checking first are a stale <code>.dpkg-old</code>
+suffix on a config file, and a rotation rule whose <code>postrotate</code> script exits
+non-zero and makes logrotate skip the remaining configs:</p>
+<pre><code class="language-bash">sudo logrotate --debug /etc/logrotate.conf 2&gt;&amp;1 | grep -iE 'error|skipping'
+</code></pre>
+<p><code>--debug</code> prints what it <em>would</em> do and changes nothing, which is the right way
+to test a config before trusting it.</p>
+<p>For an application writing its own file with no rotation rule, the minimal fix is
+a drop-in in <code>/etc/logrotate.d/</code>:</p>
+<pre><code>/var/log/myapp/*.log {
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}
+</code></pre>
+<p><code>copytruncate</code> is the one line that matters for a process you cannot restart: it
+copies the file and then truncates it in place, so the daemon keeps its open file
+descriptor instead of writing into a file that was renamed out from under it.</p>
+<h2 id="a-note-on-what-not-to-do">A note on what not to do</h2>
+<p>Deleting files from <code>/var/log</code> by hand while a process holds them open frees no
+space. The directory entry disappears, but the blocks stay allocated until the
+last file descriptor closes. <code>df</code> and <code>du</code> will disagree, which is the classic
+symptom:</p>
+<pre><code class="language-bash"># df says the disk is full, du says it is not
+df -h / &amp;&amp; du -xsh /var/log
+</code></pre>
+<p>If <code>df</code> reports far more usage than <code>du</code> can account for, look for deleted files
+still held open:</p>
+<pre><code class="language-bash">sudo lsof +L1 2&gt;/dev/null | head -20
+</code></pre>
+<p>The fix is to restart the process holding the file, not to delete more files.</p>
+<h2 id="the-three-commands-worth-remembering">The three commands worth remembering</h2>
+<pre><code class="language-bash">du -xhd1 /var | sort -rh | head          # where did it go
+sudo journalctl --disk-usage             # is the journal the reason
+systemctl list-timers logrotate.timer    # is rotation still alive
+</code></pre>
+<p>A disk that filled once will fill again. Setting <code>SystemMaxUse</code> and confirming
+the logrotate timer is live takes a few minutes and turns a recurring incident
+into a non-event.</p>
+</article>
+<section class="related">
+<h2>Related articles</h2>
+<ul class="cards">
+<li><h3><a href="https://kabutoxyz.com/articles/disk-full-incident-order/">Reading a disk-full incident in the right order</a></h3><p>Space is used, not created. Work from df to du to inodes to open files and the cause is found in minutes instead of an hour. <span class="meta">&middot; 2026-10-06</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/systemd-timer-calendar-expressions/">systemd timer calendar expressions, and the two that catch everyone</a></h3><p>OnCalendar looks like cron but is not cron. Two expression shapes look correct, parse without error, and run at the wrong time. <span class="meta">&middot; 2026-09-18</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/find-process-holding-port/">Finding which process is holding a port, and why kill does not always free it</a></h3><p>Address already in use is a symptom, not a diagnosis. Here is how to find the real owner of a port and why it sometimes refuses to release. <span class="meta">&middot; 2026-10-05</span></p></li>
+</ul>
+</section><div class="ad-slot"><!-- AdSense slot: set ADSENSE_CLIENT in build.py once approved --></div>
+  </div>
+</main>
+<footer class="site">
+  <div class="wrap">
+    <span>&copy; 2026 Ops Journal</span>
+    <span>
+      <a href="https://kabutoxyz.com/about/">About</a> &middot;
+      <a href="https://kabutoxyz.com/privacy/">Privacy</a> &middot;
+      <a href="https://kabutoxyz.com/terms/">Terms</a> &middot;
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </span>
+  </div>
+</footer>
+</body>
+</html>

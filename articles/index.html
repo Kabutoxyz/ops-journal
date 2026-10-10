@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Articles | Ops Journal</title>
+<meta name="description" content="Every article on Ops Journal: Linux operations, backups, containers and monitoring, written from systems that actually run in production.">
+<link rel="canonical" href="https://kabutoxyz.com/articles/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Articles | Ops Journal">
+<meta property="og:description" content="Every article on Ops Journal: Linux operations, backups, containers and monitoring, written from systems that actually run in production.">
+<meta property="og:url" content="https://kabutoxyz.com/articles/">
+<meta property="og:site_name" content="Ops Journal">
+<meta name="twitter:card" content="summary">
+<link rel="alternate" type="application/rss+xml" title="Ops Journal" href="https://kabutoxyz.com/feed.xml">
+<style>
+:root{
+  --bg:#fbfaf7; --panel:#ffffff; --ink:#1c1a17; --muted:#6b6459;
+  --line:#e5e0d6; --accent:#1f5f4b; --accent-soft:#eaf3ef;
+  --code-bg:#f4f1ea; --radius:10px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);
+  font-size:17px;line-height:1.65;
+}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-soft)}
+a:hover{border-bottom-color:var(--accent)}
+.wrap{max-width:760px;margin:0 auto;padding:0 20px}
+header.site{border-bottom:1px solid var(--line);background:var(--panel)}
+header.site .wrap{display:flex;align-items:baseline;justify-content:space-between;
+  gap:16px;padding-top:18px;padding-bottom:18px;flex-wrap:wrap}
+.brand{font-weight:700;font-size:1.05rem;letter-spacing:-.01em;border:none}
+.brand span{color:var(--muted);font-weight:400}
+nav.links a{margin-left:18px;font-size:.94rem;border:none;color:var(--muted)}
+nav.links a:hover{color:var(--accent)}
+main{padding:40px 0 64px}
+h1{font-size:1.85rem;line-height:1.25;letter-spacing:-.02em;margin:0 0 .5rem}
+h2{font-size:1.3rem;margin:2.2rem 0 .6rem;letter-spacing:-.01em}
+h3{font-size:1.08rem;margin:1.7rem 0 .4rem}
+p{margin:0 0 1.05rem}
+ul,ol{margin:0 0 1.05rem;padding-left:1.3rem}
+li{margin-bottom:.4rem}
+hr{border:none;border-top:1px solid var(--line);margin:2.4rem 0}
+blockquote{margin:1.4rem 0;padding:.2rem 0 .2rem 1rem;
+  border-left:3px solid var(--accent-soft);color:var(--muted)}
+code{font-family:var(--mono);font-size:.87em;background:var(--code-bg);
+  padding:.12em .38em;border-radius:5px}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px 16px;overflow-x:auto;margin:0 0 1.2rem}
+pre code{background:none;padding:0;font-size:.84rem;line-height:1.55}
+table{width:100%;border-collapse:collapse;margin:0 0 1.2rem;font-size:.94rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font-weight:600;background:var(--panel)}
+.meta{color:var(--muted);font-size:.9rem;margin-bottom:1.8rem}
+.lede{font-size:1.08rem;color:var(--muted);margin-bottom:2rem}
+.cards{list-style:none;padding:0;margin:0}
+.cards li{border-top:1px solid var(--line);padding:18px 0;margin:0}
+.cards li:first-child{border-top:none}
+.cards h3{margin:0 0 .3rem;font-size:1.12rem}
+.cards p{margin:0;color:var(--muted);font-size:.95rem}
+.related{margin-top:3rem;padding-top:1.6rem;border-top:1px solid var(--line)}
+.related h2{margin-top:0}
+.related .cards h3{font-size:1.02rem}
+.ad-slot{margin:2.4rem 0;min-height:1px}
+footer.site{border-top:1px solid var(--line);color:var(--muted);font-size:.88rem;
+  background:var(--panel)}
+footer.site .wrap{padding-top:24px;padding-bottom:28px;display:flex;
+  justify-content:space-between;gap:14px;flex-wrap:wrap}
+footer.site a{color:var(--muted);border:none}
+footer.site a:hover{color:var(--accent)}
+@media(max-width:600px){
+  body{font-size:16px}
+  h1{font-size:1.55rem}
+  nav.links a{margin-left:0;margin-right:16px}
+}
+</style>
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebSite", "@id": "https://kabutoxyz.com/#website", "url": "https://kabutoxyz.com/", "name": "Ops Journal", "description": "Field notes on Linux, backups, containers and monitoring, written by an engineer who runs the systems described here. Commands are run before they are written down."}, {"@type": "Organization", "@id": "https://kabutoxyz.com/#organization", "name": "Ops Journal", "url": "https://kabutoxyz.com/"}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://kabutoxyz.com/"}, {"@type": "ListItem", "position": 2, "name": "Articles", "item": "https://kabutoxyz.com/articles/"}]}</script>
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="https://kabutoxyz.com/">Ops Journal <span>&middot; Practical notes on running software in production</span></a>
+    <nav class="links">
+      <a href="https://kabutoxyz.com/">Articles</a>
+      <a href="https://kabutoxyz.com/about/">About</a>
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <div class="wrap">
+<h1>Articles</h1>
+<p class="lede">All 12 articles on this site, newest first.</p>
+<ul class="cards">
+<li><h3><a href="https://kabutoxyz.com/articles/file-descriptor-leak/">Too many open files: finding a file descriptor leak before it takes the service down</a></h3><p>EMFILE arrives long before the crash. Reading the per-process limits and counting open descriptors shows which service is leaking and how fast. <span class="meta">· 2026-10-07 · linux, limits, debugging</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/ssh-host-key-fingerprints/">SSH host keys: what that SHA256 fingerprint actually identifies</a></h3><p>The fingerprint prompt is the one moment SSH authentication can be attacked. Knowing what is being compared turns it from a nuisance into a check. <span class="meta">· 2026-10-07 · ssh, security, linux</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/systemd-restart-policy-crash-loop/">Crash loops: reading systemd restart policies instead of guessing</a></h3><p>Restart=on-failure and StartLimitBurst decide whether a service recovers or dies. Read them from the running unit, not from the file you think is loaded. <span class="meta">· 2026-10-07 · systemd, linux, debugging</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/rsync-backup-flags/">rsync for backups: the flags that matter and the ones that quietly change what is copied</a></h3><p>A trailing slash changes the entire result, and --delete makes a wrong path destructive. Test with --dry-run until the output matches intent. <span class="meta">· 2026-10-07 · rsync, backups, linux</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/disk-full-incident-order/">Reading a disk-full incident in the right order</a></h3><p>Space is used, not created. Work from df to du to inodes to open files and the cause is found in minutes instead of an hour. <span class="meta">· 2026-10-06 · linux, disk, incident</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/test-remote-port-reachability/">Testing whether a remote port is reachable, and what each failure means</a></h3><p>Connection refused, timed out and no route are three different problems. Tell them apart and the fault is localised in one command. <span class="meta">· 2026-10-06 · networking, linux, diagnosis</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/find-process-holding-port/">Finding which process is holding a port, and why kill does not always free it</a></h3><p>Address already in use is a symptom, not a diagnosis. Here is how to find the real owner of a port and why it sometimes refuses to release. <span class="meta">· 2026-10-05 · linux, networking, processes</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/honest-health-checks/">A health check that does not lie: checking the thing that can actually fail</a></h3><p>A check that returns 200 while the database is unreachable is worse than no check. Here is how to test the dependency, not the process. <span class="meta">· 2026-10-03 · monitoring, systemd, ops</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/container-volumes-data-survival/">What actually survives a container rebuild: volumes, mounts and the data people lose</a></h3><p>Rebuilding a container is routine until it takes the data with it. Here is which storage survives, which does not, and how to check first. <span class="meta">· 2026-09-29 · docker, containers, storage</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/backup-restore-drill/">A backup you have never restored is not a backup</a></h3><p>Most backup failures are found during a restore, which is the worst possible time. A repeatable restore drill turns that into a non-event. <span class="meta">· 2026-09-24 · backups, recovery, ops</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/systemd-timer-calendar-expressions/">systemd timer calendar expressions, and the two that catch everyone</a></h3><p>OnCalendar looks like cron but is not cron. Two expression shapes look correct, parse without error, and run at the wrong time. <span class="meta">· 2026-09-18 · systemd, linux, scheduling</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/var-log-disk-growth/">When /var/log eats the disk: finding what actually grew</a></h3><p>A full root filesystem is usually logs, not data. Here is how to find the real culprit in three commands and cap it so it stays capped. <span class="meta">· 2026-09-12 · linux, logs, disk</span></p></li>
+</ul><div class="ad-slot"><!-- AdSense slot: set ADSENSE_CLIENT in build.py once approved --></div>
+  </div>
+</main>
+<footer class="site">
+  <div class="wrap">
+    <span>&copy; 2026 Ops Journal</span>
+    <span>
+      <a href="https://kabutoxyz.com/about/">About</a> &middot;
+      <a href="https://kabutoxyz.com/privacy/">Privacy</a> &middot;
+      <a href="https://kabutoxyz.com/terms/">Terms</a> &middot;
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </span>
+  </div>
+</footer>
+</body>
+</html>

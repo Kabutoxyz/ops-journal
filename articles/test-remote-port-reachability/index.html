@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Testing a remote port: what each failure actually means</title>
+<meta name="description" content="Connection refused, timed out and no route are three different problems. Tell them apart and the fault is localised in one command.">
+<link rel="canonical" href="https://kabutoxyz.com/articles/test-remote-port-reachability/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Testing a remote port: what each failure actually means">
+<meta property="og:description" content="Connection refused, timed out and no route are three different problems. Tell them apart and the fault is localised in one command.">
+<meta property="og:url" content="https://kabutoxyz.com/articles/test-remote-port-reachability/">
+<meta property="og:site_name" content="Ops Journal">
+<meta name="twitter:card" content="summary">
+<link rel="alternate" type="application/rss+xml" title="Ops Journal" href="https://kabutoxyz.com/feed.xml">
+<style>
+:root{
+  --bg:#fbfaf7; --panel:#ffffff; --ink:#1c1a17; --muted:#6b6459;
+  --line:#e5e0d6; --accent:#1f5f4b; --accent-soft:#eaf3ef;
+  --code-bg:#f4f1ea; --radius:10px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);
+  font-size:17px;line-height:1.65;
+}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-soft)}
+a:hover{border-bottom-color:var(--accent)}
+.wrap{max-width:760px;margin:0 auto;padding:0 20px}
+header.site{border-bottom:1px solid var(--line);background:var(--panel)}
+header.site .wrap{display:flex;align-items:baseline;justify-content:space-between;
+  gap:16px;padding-top:18px;padding-bottom:18px;flex-wrap:wrap}
+.brand{font-weight:700;font-size:1.05rem;letter-spacing:-.01em;border:none}
+.brand span{color:var(--muted);font-weight:400}
+nav.links a{margin-left:18px;font-size:.94rem;border:none;color:var(--muted)}
+nav.links a:hover{color:var(--accent)}
+main{padding:40px 0 64px}
+h1{font-size:1.85rem;line-height:1.25;letter-spacing:-.02em;margin:0 0 .5rem}
+h2{font-size:1.3rem;margin:2.2rem 0 .6rem;letter-spacing:-.01em}
+h3{font-size:1.08rem;margin:1.7rem 0 .4rem}
+p{margin:0 0 1.05rem}
+ul,ol{margin:0 0 1.05rem;padding-left:1.3rem}
+li{margin-bottom:.4rem}
+hr{border:none;border-top:1px solid var(--line);margin:2.4rem 0}
+blockquote{margin:1.4rem 0;padding:.2rem 0 .2rem 1rem;
+  border-left:3px solid var(--accent-soft);color:var(--muted)}
+code{font-family:var(--mono);font-size:.87em;background:var(--code-bg);
+  padding:.12em .38em;border-radius:5px}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px 16px;overflow-x:auto;margin:0 0 1.2rem}
+pre code{background:none;padding:0;font-size:.84rem;line-height:1.55}
+table{width:100%;border-collapse:collapse;margin:0 0 1.2rem;font-size:.94rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font-weight:600;background:var(--panel)}
+.meta{color:var(--muted);font-size:.9rem;margin-bottom:1.8rem}
+.lede{font-size:1.08rem;color:var(--muted);margin-bottom:2rem}
+.cards{list-style:none;padding:0;margin:0}
+.cards li{border-top:1px solid var(--line);padding:18px 0;margin:0}
+.cards li:first-child{border-top:none}
+.cards h3{margin:0 0 .3rem;font-size:1.12rem}
+.cards p{margin:0;color:var(--muted);font-size:.95rem}
+.related{margin-top:3rem;padding-top:1.6rem;border-top:1px solid var(--line)}
+.related h2{margin-top:0}
+.related .cards h3{font-size:1.02rem}
+.ad-slot{margin:2.4rem 0;min-height:1px}
+footer.site{border-top:1px solid var(--line);color:var(--muted);font-size:.88rem;
+  background:var(--panel)}
+footer.site .wrap{padding-top:24px;padding-bottom:28px;display:flex;
+  justify-content:space-between;gap:14px;flex-wrap:wrap}
+footer.site a{color:var(--muted);border:none}
+footer.site a:hover{color:var(--accent)}
+@media(max-width:600px){
+  body{font-size:16px}
+  h1{font-size:1.55rem}
+  nav.links a{margin-left:0;margin-right:16px}
+}
+</style>
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebSite", "@id": "https://kabutoxyz.com/#website", "url": "https://kabutoxyz.com/", "name": "Ops Journal", "description": "Field notes on Linux, backups, containers and monitoring, written by an engineer who runs the systems described here. Commands are run before they are written down."}, {"@type": "Organization", "@id": "https://kabutoxyz.com/#organization", "name": "Ops Journal", "url": "https://kabutoxyz.com/"}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "Article", "headline": "Testing a remote port: what each failure actually means", "description": "Connection refused, timed out and no route are three different problems. Tell them apart and the fault is localised in one command.", "datePublished": "2026-10-06", "dateModified": "2026-10-06", "inLanguage": "en", "url": "https://kabutoxyz.com/articles/test-remote-port-reachability/", "mainEntityOfPage": {"@type": "WebPage", "@id": "https://kabutoxyz.com/articles/test-remote-port-reachability/"}, "author": {"@type": "Organization", "name": "Ops Journal"}, "publisher": {"@type": "Organization", "name": "Ops Journal", "url": "https://kabutoxyz.com/"}, "keywords": "networking, linux, diagnosis"}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://kabutoxyz.com/"}, {"@type": "ListItem", "position": 2, "name": "Articles", "item": "https://kabutoxyz.com/articles/"}, {"@type": "ListItem", "position": 3, "name": "Testing a remote port: what each failure actually means", "item": "https://kabutoxyz.com/articles/test-remote-port-reachability/"}]}</script>
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="https://kabutoxyz.com/">Ops Journal <span>&middot; Practical notes on running software in production</span></a>
+    <nav class="links">
+      <a href="https://kabutoxyz.com/">Articles</a>
+      <a href="https://kabutoxyz.com/about/">About</a>
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <div class="wrap">
+<article>
+<h1>Testing whether a remote port is reachable, and what each failure means</h1>
+<p class="meta">Published 2026-10-06 · 7 min read</p>
+<p>When a service is unreachable, the failure message contains most of the
+diagnosis. The mistake is treating "it does not connect" as a single problem when
+it is three distinct ones with different causes and different fixes.</p>
+<h2 id="the-three-failures-and-what-they-mean">The three failures and what they mean</h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Meaning</th>
+<th>Where to look</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Connection refused</td>
+<td>Something replied and said no</td>
+<td>Service not listening, or bound to the wrong interface</td>
+</tr>
+<tr>
+<td>Connection timed out</td>
+<td>Nothing replied at all</td>
+<td>Firewall dropping packets, or wrong address</td>
+</tr>
+<tr>
+<td>No route to host</td>
+<td>The network itself cannot reach it</td>
+<td>Routing, wrong subnet, host down</td>
+</tr>
+</tbody>
+</table>
+<p>A refusal is the most informative and the most often misread. A refused
+connection means a packet arrived at a host and that host actively rejected it
+with a TCP RST. The network path is fine, DNS resolved, and something is running
+on that address. The problem is the service or the bind address.</p>
+<p>A timeout means silence. Either the packet was dropped by a firewall, or it went
+to an address where nothing is listening but where the stack is configured to
+drop rather than refuse. Timeouts are the hardest to localise because the failure
+is the absence of a response.</p>
+<h2 id="test-the-port-without-assuming-what-is-running-there">Test the port without assuming what is running there</h2>
+<p>The most useful tool is one that only opens a TCP connection and reports what
+happened:</p>
+<pre><code class="language-bash">timeout 5 bash -c 'cat &lt; /dev/null &gt; /dev/tcp/10.0.0.5/5432' &amp;&amp; echo &quot;OPEN&quot; || echo &quot;CLOSED or FILTERED&quot;
+</code></pre>
+<p>The <code>/dev/tcp</code> pseudo-device is a bash built-in; it does not exist in <code>sh</code> or
+<code>dash</code>, which is why the command is wrapped in <code>bash -c</code>. If the connection opens,
+the redirect succeeds and the command prints <code>OPEN</code>. If it is refused, bash
+reports the error and the <code>||</code> branch runs.</p>
+<p>To distinguish refused from filtered, capture the actual error rather than
+collapsing it:</p>
+<pre><code class="language-bash">timeout 5 bash -c 'cat &lt; /dev/null &gt; /dev/tcp/10.0.0.5/5432'
+echo &quot;exit=$?&quot;
+</code></pre>
+<p>The error text is the diagnosis: <code>Connection refused</code> points at the service,
+<code>Connection timed out</code> points at a firewall, and <code>No route to host</code> points at
+routing.</p>
+<h2 id="prefer-nc-or-ss-when-they-are-available">Prefer nc or ss when they are available</h2>
+<p>If <code>netcat</code> is installed it gives the same information with clearer flags:</p>
+<pre><code class="language-bash">nc -zv 10.0.0.5 5432          # -z scan only, -v verbose
+nc -zvw3 10.0.0.5 5432        # with a 3 second timeout
+</code></pre>
+<p><code>-z</code> is what makes it a port test rather than a data exchange — without it, <code>nc</code>
+opens a connection and waits for input, which looks like a hang.</p>
+<p><code>ss</code> can test from the local machine's perspective and show the resulting socket
+state, which is useful for confirming a connection is being attempted at all:</p>
+<pre><code class="language-bash">ss -tan | grep 10.0.0.5
+</code></pre>
+<p>A line in <code>SYN-SENT</code> that persists means the SYN went out and nothing came back,
+which is the signature of a silent firewall drop.</p>
+<h2 id="localise-is-it-the-service-or-the-path">Localise: is it the service or the path</h2>
+<p>The single most useful comparison is between connecting locally and connecting
+remotely.</p>
+<p>From the server itself:</p>
+<pre><code class="language-bash">ss -tlnp | grep 5432
+</code></pre>
+<p>If the service is listening on <code>127.0.0.1:5432</code>, it is reachable only from the
+machine itself and every remote attempt will time out or be refused regardless of
+firewall rules. This is the most common cause of "the database is down" when the
+database is in fact running perfectly and bound to loopback.</p>
+<p>If it listens on <code>0.0.0.0:5432</code> or <code>*:5432</code> but remote connections fail, the
+problem is between the hosts. Check the host firewall:</p>
+<pre><code class="language-bash">sudo iptables -L -n -v 2&gt;/dev/null | head -20
+sudo nft list ruleset 2&gt;/dev/null | head -30
+</code></pre>
+<p>Then check whether a cloud provider's security group or network ACL is filtering,
+which no amount of local inspection will reveal.</p>
+<h2 id="dns-is-a-separate-question">DNS is a separate question</h2>
+<p>A timeout caused by a wrong address looks identical to a timeout caused by a
+firewall. Resolve the name first and confirm it is what you expect:</p>
+<pre><code class="language-bash">getent hosts db.internal
+</code></pre>
+<p><code>getent hosts</code> is preferable to <code>nslookup</code> for this because it uses the same
+resolution path as the application, including <code>/etc/hosts</code> and NSS configuration.
+An application resolving a name differently from your diagnostic tool is a real
+and confusing class of bug, and <code>getent</code> avoids it.</p>
+<p>To compare the address actually being used, connect by IP as well as by name:</p>
+<pre><code class="language-bash">nc -zvw3 10.0.0.5 5432     # by address
+nc -zvw3 db.internal 5432  # by name
+</code></pre>
+<p>If the IP works and the name does not, the problem is DNS or <code>/etc/hosts</code>, not
+the service.</p>
+<h2 id="what-to-record-when-it-works">What to record when it works</h2>
+<p>The value of this exercise is having a baseline. When the service is healthy,
+record what a successful connection looks like:</p>
+<pre><code class="language-bash">timeout 5 bash -c 'cat &lt; /dev/null &gt; /dev/tcp/db.internal/5432' &amp;&amp; echo &quot;reachable $(date -u +%FT%TZ)&quot;
+</code></pre>
+<p>A log line like that, captured on a schedule, turns "it was working yesterday"
+into a timestamp you can correlate against the change that broke it. That
+correlation is usually the whole investigation.</p>
+</article>
+<section class="related">
+<h2>Related articles</h2>
+<ul class="cards">
+<li><h3><a href="https://kabutoxyz.com/articles/find-process-holding-port/">Finding which process is holding a port, and why kill does not always free it</a></h3><p>Address already in use is a symptom, not a diagnosis. Here is how to find the real owner of a port and why it sometimes refuses to release. <span class="meta">&middot; 2026-10-05</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/var-log-disk-growth/">When /var/log eats the disk: finding what actually grew</a></h3><p>A full root filesystem is usually logs, not data. Here is how to find the real culprit in three commands and cap it so it stays capped. <span class="meta">&middot; 2026-09-12</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/systemd-timer-calendar-expressions/">systemd timer calendar expressions, and the two that catch everyone</a></h3><p>OnCalendar looks like cron but is not cron. Two expression shapes look correct, parse without error, and run at the wrong time. <span class="meta">&middot; 2026-09-18</span></p></li>
+</ul>
+</section><div class="ad-slot"><!-- AdSense slot: set ADSENSE_CLIENT in build.py once approved --></div>
+  </div>
+</main>
+<footer class="site">
+  <div class="wrap">
+    <span>&copy; 2026 Ops Journal</span>
+    <span>
+      <a href="https://kabutoxyz.com/about/">About</a> &middot;
+      <a href="https://kabutoxyz.com/privacy/">Privacy</a> &middot;
+      <a href="https://kabutoxyz.com/terms/">Terms</a> &middot;
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </span>
+  </div>
+</footer>
+</body>
+</html>

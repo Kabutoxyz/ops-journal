@@ -1,0 +1,28 @@
+# Ops Journal
+
+> Field notes on Linux, backups, containers and monitoring, written by an engineer who runs the systems described here. Commands are run before they are written down.
+
+Site: https://kabutoxyz.com/
+Feed: https://kabutoxyz.com/feed.xml
+
+## Articles
+
+- [Too many open files: finding a file descriptor leak before it takes the service down](https://kabutoxyz.com/articles/file-descriptor-leak/): EMFILE arrives long before the crash. Reading the per-process limits and counting open descriptors shows which service is leaking and how fast.
+- [SSH host keys: what that SHA256 fingerprint actually identifies](https://kabutoxyz.com/articles/ssh-host-key-fingerprints/): The fingerprint prompt is the one moment SSH authentication can be attacked. Knowing what is being compared turns it from a nuisance into a check.
+- [Crash loops: reading systemd restart policies instead of guessing](https://kabutoxyz.com/articles/systemd-restart-policy-crash-loop/): Restart=on-failure and StartLimitBurst decide whether a service recovers or dies. Read them from the running unit, not from the file you think is loaded.
+- [rsync for backups: the flags that matter and the ones that quietly change what is copied](https://kabutoxyz.com/articles/rsync-backup-flags/): A trailing slash changes the entire result, and --delete makes a wrong path destructive. Test with --dry-run until the output matches intent.
+- [Reading a disk-full incident in the right order](https://kabutoxyz.com/articles/disk-full-incident-order/): Space is used, not created. Work from df to du to inodes to open files and the cause is found in minutes instead of an hour.
+- [Testing whether a remote port is reachable, and what each failure means](https://kabutoxyz.com/articles/test-remote-port-reachability/): Connection refused, timed out and no route are three different problems. Tell them apart and the fault is localised in one command.
+- [Finding which process is holding a port, and why kill does not always free it](https://kabutoxyz.com/articles/find-process-holding-port/): Address already in use is a symptom, not a diagnosis. Here is how to find the real owner of a port and why it sometimes refuses to release.
+- [A health check that does not lie: checking the thing that can actually fail](https://kabutoxyz.com/articles/honest-health-checks/): A check that returns 200 while the database is unreachable is worse than no check. Here is how to test the dependency, not the process.
+- [What actually survives a container rebuild: volumes, mounts and the data people lose](https://kabutoxyz.com/articles/container-volumes-data-survival/): Rebuilding a container is routine until it takes the data with it. Here is which storage survives, which does not, and how to check first.
+- [A backup you have never restored is not a backup](https://kabutoxyz.com/articles/backup-restore-drill/): Most backup failures are found during a restore, which is the worst possible time. A repeatable restore drill turns that into a non-event.
+- [systemd timer calendar expressions, and the two that catch everyone](https://kabutoxyz.com/articles/systemd-timer-calendar-expressions/): OnCalendar looks like cron but is not cron. Two expression shapes look correct, parse without error, and run at the wrong time.
+- [When /var/log eats the disk: finding what actually grew](https://kabutoxyz.com/articles/var-log-disk-growth/): A full root filesystem is usually logs, not data. Here is how to find the real culprit in three commands and cap it so it stays capped.
+
+## Pages
+
+- [About](https://kabutoxyz.com/about/): who writes this site and how it is edited
+- [Contact](https://kabutoxyz.com/contact/): corrections and questions
+- [Privacy](https://kabutoxyz.com/privacy/): data collected and advertising cookies
+- [Terms](https://kabutoxyz.com/terms/): content licence and disclaimer

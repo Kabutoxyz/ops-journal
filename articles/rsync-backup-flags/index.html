@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rsync backup flags that quietly change what is copied</title>
+<meta name="description" content="A trailing slash changes the entire result, and --delete makes a wrong path destructive. Test with --dry-run until the output matches intent.">
+<link rel="canonical" href="https://kabutoxyz.com/articles/rsync-backup-flags/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="rsync backup flags that quietly change what is copied">
+<meta property="og:description" content="A trailing slash changes the entire result, and --delete makes a wrong path destructive. Test with --dry-run until the output matches intent.">
+<meta property="og:url" content="https://kabutoxyz.com/articles/rsync-backup-flags/">
+<meta property="og:site_name" content="Ops Journal">
+<meta name="twitter:card" content="summary">
+<link rel="alternate" type="application/rss+xml" title="Ops Journal" href="https://kabutoxyz.com/feed.xml">
+<style>
+:root{
+  --bg:#fbfaf7; --panel:#ffffff; --ink:#1c1a17; --muted:#6b6459;
+  --line:#e5e0d6; --accent:#1f5f4b; --accent-soft:#eaf3ef;
+  --code-bg:#f4f1ea; --radius:10px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);
+  font-size:17px;line-height:1.65;
+}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-soft)}
+a:hover{border-bottom-color:var(--accent)}
+.wrap{max-width:760px;margin:0 auto;padding:0 20px}
+header.site{border-bottom:1px solid var(--line);background:var(--panel)}
+header.site .wrap{display:flex;align-items:baseline;justify-content:space-between;
+  gap:16px;padding-top:18px;padding-bottom:18px;flex-wrap:wrap}
+.brand{font-weight:700;font-size:1.05rem;letter-spacing:-.01em;border:none}
+.brand span{color:var(--muted);font-weight:400}
+nav.links a{margin-left:18px;font-size:.94rem;border:none;color:var(--muted)}
+nav.links a:hover{color:var(--accent)}
+main{padding:40px 0 64px}
+h1{font-size:1.85rem;line-height:1.25;letter-spacing:-.02em;margin:0 0 .5rem}
+h2{font-size:1.3rem;margin:2.2rem 0 .6rem;letter-spacing:-.01em}
+h3{font-size:1.08rem;margin:1.7rem 0 .4rem}
+p{margin:0 0 1.05rem}
+ul,ol{margin:0 0 1.05rem;padding-left:1.3rem}
+li{margin-bottom:.4rem}
+hr{border:none;border-top:1px solid var(--line);margin:2.4rem 0}
+blockquote{margin:1.4rem 0;padding:.2rem 0 .2rem 1rem;
+  border-left:3px solid var(--accent-soft);color:var(--muted)}
+code{font-family:var(--mono);font-size:.87em;background:var(--code-bg);
+  padding:.12em .38em;border-radius:5px}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px 16px;overflow-x:auto;margin:0 0 1.2rem}
+pre code{background:none;padding:0;font-size:.84rem;line-height:1.55}
+table{width:100%;border-collapse:collapse;margin:0 0 1.2rem;font-size:.94rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font-weight:600;background:var(--panel)}
+.meta{color:var(--muted);font-size:.9rem;margin-bottom:1.8rem}
+.lede{font-size:1.08rem;color:var(--muted);margin-bottom:2rem}
+.cards{list-style:none;padding:0;margin:0}
+.cards li{border-top:1px solid var(--line);padding:18px 0;margin:0}
+.cards li:first-child{border-top:none}
+.cards h3{margin:0 0 .3rem;font-size:1.12rem}
+.cards p{margin:0;color:var(--muted);font-size:.95rem}
+.related{margin-top:3rem;padding-top:1.6rem;border-top:1px solid var(--line)}
+.related h2{margin-top:0}
+.related .cards h3{font-size:1.02rem}
+.ad-slot{margin:2.4rem 0;min-height:1px}
+footer.site{border-top:1px solid var(--line);color:var(--muted);font-size:.88rem;
+  background:var(--panel)}
+footer.site .wrap{padding-top:24px;padding-bottom:28px;display:flex;
+  justify-content:space-between;gap:14px;flex-wrap:wrap}
+footer.site a{color:var(--muted);border:none}
+footer.site a:hover{color:var(--accent)}
+@media(max-width:600px){
+  body{font-size:16px}
+  h1{font-size:1.55rem}
+  nav.links a{margin-left:0;margin-right:16px}
+}
+</style>
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebSite", "@id": "https://kabutoxyz.com/#website", "url": "https://kabutoxyz.com/", "name": "Ops Journal", "description": "Field notes on Linux, backups, containers and monitoring, written by an engineer who runs the systems described here. Commands are run before they are written down."}, {"@type": "Organization", "@id": "https://kabutoxyz.com/#organization", "name": "Ops Journal", "url": "https://kabutoxyz.com/"}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "Article", "headline": "rsync backup flags that quietly change what is copied", "description": "A trailing slash changes the entire result, and --delete makes a wrong path destructive. Test with --dry-run until the output matches intent.", "datePublished": "2026-10-07", "dateModified": "2026-10-07", "inLanguage": "en", "url": "https://kabutoxyz.com/articles/rsync-backup-flags/", "mainEntityOfPage": {"@type": "WebPage", "@id": "https://kabutoxyz.com/articles/rsync-backup-flags/"}, "author": {"@type": "Organization", "name": "Ops Journal"}, "publisher": {"@type": "Organization", "name": "Ops Journal", "url": "https://kabutoxyz.com/"}, "keywords": "rsync, backups, linux"}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://kabutoxyz.com/"}, {"@type": "ListItem", "position": 2, "name": "Articles", "item": "https://kabutoxyz.com/articles/"}, {"@type": "ListItem", "position": 3, "name": "rsync backup flags that quietly change what is copied", "item": "https://kabutoxyz.com/articles/rsync-backup-flags/"}]}</script>
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="https://kabutoxyz.com/">Ops Journal <span>&middot; Practical notes on running software in production</span></a>
+    <nav class="links">
+      <a href="https://kabutoxyz.com/">Articles</a>
+      <a href="https://kabutoxyz.com/about/">About</a>
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <div class="wrap">
+<article>
+<h1>rsync for backups: the flags that matter and the ones that quietly change what is copied</h1>
+<p class="meta">Published 2026-10-07 · 8 min read</p>
+<p><code>rsync</code> is the right tool for most file-level backups and the wrong tool to run
+from memory. A few of its defaults are surprising, and one of them — the trailing
+slash on the source path — changes what gets copied in a way that is easy to miss
+until you are restoring.</p>
+<h2 id="the-trailing-slash-rule">The trailing slash rule</h2>
+<p>This is the single most important thing to get right:</p>
+<pre><code class="language-bash">rsync -a /data/ /backup/data/     # copies the CONTENTS of /data into /backup/data
+rsync -a /data  /backup/data/     # copies /data ITSELF, as /backup/data/data
+</code></pre>
+<p>A trailing slash on the source means "the contents of this directory". No
+trailing slash means "this directory, as an entry". Both are useful and the
+difference is invisible in the command unless you are looking for it.</p>
+<p>The habit that prevents the mistake is to always use a trailing slash on both
+sides and be explicit about what that means, or to test with <code>--dry-run</code> before
+the first real run.</p>
+<h2 id="always-dry-run-first">Always dry-run first</h2>
+<p><code>--dry-run</code> (or <code>-n</code>) prints what would be transferred and changes nothing.
+Combined with <code>-v</code> it is a complete rehearsal:</p>
+<pre><code class="language-bash">rsync -avn --delete /data/ /backup/data/
+</code></pre>
+<p>Read the output before removing the <code>n</code>. This is especially important with
+<code>--delete</code>, where a wrong source path means the backup target gets emptied.</p>
+<h2 id="the-archive-flag-and-what-it-actually-includes">The archive flag, and what it actually includes</h2>
+<p><code>-a</code> is short for <code>-rlptgoD</code>, and each letter matters:</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Preserves</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-r</code></td>
+<td>recurse into directories</td>
+</tr>
+<tr>
+<td><code>-l</code></td>
+<td>symlinks as symlinks</td>
+</tr>
+<tr>
+<td><code>-p</code></td>
+<td>permissions</td>
+</tr>
+<tr>
+<td><code>-t</code></td>
+<td>modification times</td>
+</tr>
+<tr>
+<td><code>-g</code></td>
+<td>group</td>
+</tr>
+<tr>
+<td><code>-o</code></td>
+<td>owner</td>
+</tr>
+<tr>
+<td><code>-D</code></td>
+<td>device files and special files</td>
+</tr>
+</tbody>
+</table>
+<p><code>-t</code> is the one that makes rsync efficient: because modification times are
+preserved, the next run can skip unchanged files by comparing size and mtime
+instead of reading content. Without it, every run re-copies everything, which is
+correct and useless.</p>
+<p><code>-o</code> and <code>-g</code> only work when running as root. As a normal user they are silently
+ignored, which is worth knowing because a backup that looks complete may have
+lost ownership information.</p>
+<h2 id="the-flags-that-change-behaviour-in-ways-that-bite">The flags that change behaviour in ways that bite</h2>
+<p><strong><code>--delete</code></strong> removes files at the destination that no longer exist at the
+source. This is what makes a backup mirror the source rather than accumulate
+history. It is also the flag that turns a typo into data loss, and it does not
+prompt.</p>
+<pre><code class="language-bash"># safe form: delete only what is missing, but keep a safety net
+rsync -av --delete --backup --backup-dir=/backup/trash/ /data/ /backup/data/
+</code></pre>
+<p><code>--backup-dir</code> moves anything that would be deleted into a separate directory
+instead of destroying it. For a first-time setup this is worth the disk space.</p>
+<p><strong><code>--exclude</code></strong> is evaluated against the transfer, and the pattern rules are not
+shell globs. A common error is <code>--exclude '*.log'</code>, which works, versus
+<code>--exclude 'cache'</code>, which excludes any file or directory named <code>cache</code> at any
+depth — usually what you want, occasionally a surprise.</p>
+<pre><code class="language-bash">rsync -av --exclude='*.tmp' --exclude='.cache/' /data/ /backup/data/
+</code></pre>
+<p>The trailing slash on <code>.cache/</code> restricts the match to directories, which is the
+documented way to avoid matching a file of the same name.</p>
+<p><strong><code>--exclude-from</code></strong> reads patterns from a file, which is the maintainable form
+once there are more than a handful:</p>
+<pre><code class="language-bash">rsync -av --exclude-from=/etc/backup-excludes.txt /data/ /backup/data/
+</code></pre>
+<p><strong><code>--checksum</code></strong> makes rsync compare content hashes instead of size and mtime.
+It is much slower and it catches the case where a file changed without its
+modification time changing — rare, but real on files restored from an archive.
+Use it for verification runs, not for every backup.</p>
+<p><strong><code>--partial</code></strong> keeps a partially transferred file so the next run resumes
+instead of starting over. For large files over a slow link this is the difference
+between a backup that finishes and one that never does:</p>
+<pre><code class="language-bash">rsync -av --partial --progress /data/ /backup/data/
+</code></pre>
+<p><strong><code>-z</code></strong> compresses during transfer. It helps over slow links and costs CPU. On a
+fast local network it slows things down, which is worth knowing before adding it
+by habit.</p>
+<h2 id="the-whole-command-with-the-pieces-that-matter">The whole command, with the pieces that matter</h2>
+<pre><code class="language-bash">rsync -aHv --delete --partial --exclude-from=/etc/backup-excludes.txt \
+  --numeric-ids /data/ /backup/data/
+</code></pre>
+<p><code>-H</code> preserves hard links, which matters for anything with a mail spool or a
+deduplicating store — without it, hard-linked files become separate copies and
+the backup can be much larger than the source. <code>--numeric-ids</code> prevents user and
+group names being mapped through the local name service, which keeps ownership
+correct when the backup is restored on a machine with different users.</p>
+<h2 id="verifying-because-a-completed-rsync-is-not-a-verified-backup">Verifying, because a completed rsync is not a verified backup</h2>
+<p>rsync exiting zero means it transferred what it decided to transfer. It does not
+mean the destination matches the source. A verification pass compares the two
+directories without transferring:</p>
+<pre><code class="language-bash">rsync -avn --checksum --delete /data/ /backup/data/ | tail -20
+</code></pre>
+<p>With <code>-n</code> and <code>--checksum</code>, anything listed is a difference. An empty list means
+the two trees match by content, which is the check worth running after a backup
+that matters.</p>
+<h2 id="running-it-on-a-schedule">Running it on a schedule</h2>
+<p>Under systemd, a oneshot service with a timer is cleaner than a cron entry
+because the output lands in the journal:</p>
+<pre><code class="language-ini"># /etc/systemd/system/backup-data.service
+[Unit]
+Description=Back up /data
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/rsync -aHv --delete --partial \
+  --exclude-from=/etc/backup-excludes.txt /data/ /backup/data/
+</code></pre>
+<p>Paired with a timer at a quiet hour, and with <code>Persistent=true</code> so a run missed
+while the machine was off happens at the next boot.</p>
+<h2 id="the-two-rules-worth-keeping">The two rules worth keeping</h2>
+<p>Dry-run with <code>--delete</code> until the output matches what you expect, and check the
+trailing slash on the source every single time. Those two habits prevent almost
+every rsync backup disaster, and both cost seconds.</p>
+</article>
+<section class="related">
+<h2>Related articles</h2>
+<ul class="cards">
+<li><h3><a href="https://kabutoxyz.com/articles/var-log-disk-growth/">When /var/log eats the disk: finding what actually grew</a></h3><p>A full root filesystem is usually logs, not data. Here is how to find the real culprit in three commands and cap it so it stays capped. <span class="meta">&middot; 2026-09-12</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/systemd-timer-calendar-expressions/">systemd timer calendar expressions, and the two that catch everyone</a></h3><p>OnCalendar looks like cron but is not cron. Two expression shapes look correct, parse without error, and run at the wrong time. <span class="meta">&middot; 2026-09-18</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/backup-restore-drill/">A backup you have never restored is not a backup</a></h3><p>Most backup failures are found during a restore, which is the worst possible time. A repeatable restore drill turns that into a non-event. <span class="meta">&middot; 2026-09-24</span></p></li>
+</ul>
+</section><div class="ad-slot"><!-- AdSense slot: set ADSENSE_CLIENT in build.py once approved --></div>
+  </div>
+</main>
+<footer class="site">
+  <div class="wrap">
+    <span>&copy; 2026 Ops Journal</span>
+    <span>
+      <a href="https://kabutoxyz.com/about/">About</a> &middot;
+      <a href="https://kabutoxyz.com/privacy/">Privacy</a> &middot;
+      <a href="https://kabutoxyz.com/terms/">Terms</a> &middot;
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </span>
+  </div>
+</footer>
+</body>
+</html>

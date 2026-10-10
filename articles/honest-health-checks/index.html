@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A health check that does not lie</title>
+<meta name="description" content="A check that returns 200 while the database is unreachable is worse than no check. Here is how to test the dependency, not the process.">
+<link rel="canonical" href="https://kabutoxyz.com/articles/honest-health-checks/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="A health check that does not lie">
+<meta property="og:description" content="A check that returns 200 while the database is unreachable is worse than no check. Here is how to test the dependency, not the process.">
+<meta property="og:url" content="https://kabutoxyz.com/articles/honest-health-checks/">
+<meta property="og:site_name" content="Ops Journal">
+<meta name="twitter:card" content="summary">
+<link rel="alternate" type="application/rss+xml" title="Ops Journal" href="https://kabutoxyz.com/feed.xml">
+<style>
+:root{
+  --bg:#fbfaf7; --panel:#ffffff; --ink:#1c1a17; --muted:#6b6459;
+  --line:#e5e0d6; --accent:#1f5f4b; --accent-soft:#eaf3ef;
+  --code-bg:#f4f1ea; --radius:10px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);
+  font-size:17px;line-height:1.65;
+}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-soft)}
+a:hover{border-bottom-color:var(--accent)}
+.wrap{max-width:760px;margin:0 auto;padding:0 20px}
+header.site{border-bottom:1px solid var(--line);background:var(--panel)}
+header.site .wrap{display:flex;align-items:baseline;justify-content:space-between;
+  gap:16px;padding-top:18px;padding-bottom:18px;flex-wrap:wrap}
+.brand{font-weight:700;font-size:1.05rem;letter-spacing:-.01em;border:none}
+.brand span{color:var(--muted);font-weight:400}
+nav.links a{margin-left:18px;font-size:.94rem;border:none;color:var(--muted)}
+nav.links a:hover{color:var(--accent)}
+main{padding:40px 0 64px}
+h1{font-size:1.85rem;line-height:1.25;letter-spacing:-.02em;margin:0 0 .5rem}
+h2{font-size:1.3rem;margin:2.2rem 0 .6rem;letter-spacing:-.01em}
+h3{font-size:1.08rem;margin:1.7rem 0 .4rem}
+p{margin:0 0 1.05rem}
+ul,ol{margin:0 0 1.05rem;padding-left:1.3rem}
+li{margin-bottom:.4rem}
+hr{border:none;border-top:1px solid var(--line);margin:2.4rem 0}
+blockquote{margin:1.4rem 0;padding:.2rem 0 .2rem 1rem;
+  border-left:3px solid var(--accent-soft);color:var(--muted)}
+code{font-family:var(--mono);font-size:.87em;background:var(--code-bg);
+  padding:.12em .38em;border-radius:5px}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px 16px;overflow-x:auto;margin:0 0 1.2rem}
+pre code{background:none;padding:0;font-size:.84rem;line-height:1.55}
+table{width:100%;border-collapse:collapse;margin:0 0 1.2rem;font-size:.94rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font-weight:600;background:var(--panel)}
+.meta{color:var(--muted);font-size:.9rem;margin-bottom:1.8rem}
+.lede{font-size:1.08rem;color:var(--muted);margin-bottom:2rem}
+.cards{list-style:none;padding:0;margin:0}
+.cards li{border-top:1px solid var(--line);padding:18px 0;margin:0}
+.cards li:first-child{border-top:none}
+.cards h3{margin:0 0 .3rem;font-size:1.12rem}
+.cards p{margin:0;color:var(--muted);font-size:.95rem}
+.related{margin-top:3rem;padding-top:1.6rem;border-top:1px solid var(--line)}
+.related h2{margin-top:0}
+.related .cards h3{font-size:1.02rem}
+.ad-slot{margin:2.4rem 0;min-height:1px}
+footer.site{border-top:1px solid var(--line);color:var(--muted);font-size:.88rem;
+  background:var(--panel)}
+footer.site .wrap{padding-top:24px;padding-bottom:28px;display:flex;
+  justify-content:space-between;gap:14px;flex-wrap:wrap}
+footer.site a{color:var(--muted);border:none}
+footer.site a:hover{color:var(--accent)}
+@media(max-width:600px){
+  body{font-size:16px}
+  h1{font-size:1.55rem}
+  nav.links a{margin-left:0;margin-right:16px}
+}
+</style>
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebSite", "@id": "https://kabutoxyz.com/#website", "url": "https://kabutoxyz.com/", "name": "Ops Journal", "description": "Field notes on Linux, backups, containers and monitoring, written by an engineer who runs the systems described here. Commands are run before they are written down."}, {"@type": "Organization", "@id": "https://kabutoxyz.com/#organization", "name": "Ops Journal", "url": "https://kabutoxyz.com/"}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "Article", "headline": "A health check that does not lie", "description": "A check that returns 200 while the database is unreachable is worse than no check. Here is how to test the dependency, not the process.", "datePublished": "2026-10-03", "dateModified": "2026-10-03", "inLanguage": "en", "url": "https://kabutoxyz.com/articles/honest-health-checks/", "mainEntityOfPage": {"@type": "WebPage", "@id": "https://kabutoxyz.com/articles/honest-health-checks/"}, "author": {"@type": "Organization", "name": "Ops Journal"}, "publisher": {"@type": "Organization", "name": "Ops Journal", "url": "https://kabutoxyz.com/"}, "keywords": "monitoring, systemd, ops"}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://kabutoxyz.com/"}, {"@type": "ListItem", "position": 2, "name": "Articles", "item": "https://kabutoxyz.com/articles/"}, {"@type": "ListItem", "position": 3, "name": "A health check that does not lie", "item": "https://kabutoxyz.com/articles/honest-health-checks/"}]}</script>
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="https://kabutoxyz.com/">Ops Journal <span>&middot; Practical notes on running software in production</span></a>
+    <nav class="links">
+      <a href="https://kabutoxyz.com/">Articles</a>
+      <a href="https://kabutoxyz.com/about/">About</a>
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <div class="wrap">
+<article>
+<h1>A health check that does not lie: checking the thing that can actually fail</h1>
+<p class="meta">Published 2026-10-03 · 7 min read</p>
+<p>The purpose of a health check is to answer one question: is this service able to
+do its job right now? Most health checks answer a different and easier question —
+is the process listening — and the gap between those two is where outages hide.</p>
+<p>A service can be listening, returning 200 on <code>/</code>, and completely unable to serve
+a request that touches its database. That is the failure a health check should
+catch and most do not.</p>
+<h2 id="why-the-process-check-is-not-enough">Why the process check is not enough</h2>
+<p>The failure modes that matter are almost never "the process died". They are:</p>
+<ul>
+<li>the database connection pool is exhausted</li>
+<li>a dependency is reachable but returning errors</li>
+<li>the application is up but its migration did not complete</li>
+<li>the disk holding its data is full, so writes fail while reads succeed</li>
+</ul>
+<p>Every one of those leaves the process running and the port open. A check that
+only tests the socket passes in all four cases.</p>
+<h2 id="test-the-dependency-not-the-socket">Test the dependency, not the socket</h2>
+<p>For an HTTP service, the first improvement is to follow redirects and treat any
+non-2xx as failure, which <code>curl</code> does not do by default:</p>
+<pre><code class="language-bash">curl -fsS -o /dev/null -m 5 http://127.0.0.1:8080/healthz
+</code></pre>
+<p>The flags are worth knowing individually: <code>-f</code> makes curl exit non-zero on an
+HTTP error instead of printing the error page and exiting zero, <code>-s</code> silences
+the progress meter, <code>-S</code> still shows a real error when one occurs, and <code>-m 5</code>
+caps the whole request at five seconds so a hung service fails the check rather
+than hanging the monitor.</p>
+<p>The bigger improvement is to make <code>/healthz</code> do real work. A health endpoint
+that only returns <code>{"status":"ok"}</code> is decoration. One that queries the database
+is a check:</p>
+<pre><code class="language-bash"># the application's own health endpoint should touch its dependencies;
+# verify it does by stopping the dependency and watching it fail
+sudo systemctl stop postgresql
+curl -fsS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/healthz
+sudo systemctl start postgresql
+</code></pre>
+<p>If that still prints <code>200</code> with the database stopped, the endpoint is not
+checking anything and the monitor built on it is blind.</p>
+<h2 id="check-the-dependency-directly-when-you-can">Check the dependency directly when you can</h2>
+<p>Where the application does not expose a dependency-aware endpoint, a check can
+test the dependency itself. For a database, the strongest cheap test is a real
+query, not a TCP connect:</p>
+<pre><code class="language-bash"># PostgreSQL: a connection that also proves it can read
+pg_isready -h 127.0.0.1 -p 5432 -t 3
+
+# and a query, which catches a server that accepts connections but cannot serve
+psql -h 127.0.0.1 -U app -d appdb -tAc 'select 1' &gt;/dev/null
+</code></pre>
+<p><code>pg_isready</code> answers "is the server accepting connections", which is weaker than
+a query but costs almost nothing. The <code>select 1</code> is the stronger check; it fails
+if the server is up but the database is in recovery or the disk is full.</p>
+<p>For a cache, the equivalent is a write and read back, since a cache that accepts
+commands but cannot evict or persist is still broken:</p>
+<pre><code class="language-bash">redis-cli -h 127.0.0.1 ping | grep -q PONG
+</code></pre>
+<h2 id="make-the-check-fail-loudly-and-stop">Make the check fail loudly and stop</h2>
+<p>A health check that returns non-zero but is run by something that ignores the
+exit code is the same as no check. If the check runs from systemd, wire it to a
+failure action so a persistent failure is visible without a dashboard:</p>
+<pre><code class="language-ini"># /etc/systemd/system/healthcheck.service
+[Unit]
+Description=Service health check
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/healthcheck.sh
+
+[Install]
+WantedBy=multi-user.target
+</code></pre>
+<p>with a timer that runs it every few minutes:</p>
+<pre><code class="language-ini"># /etc/systemd/system/healthcheck.timer
+[Unit]
+Description=Run health check every 5 minutes
+
+[Timer]
+OnCalendar=*:0/5
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+</code></pre>
+<p>The <code>OnCalendar=*:0/5</code> expression means every five minutes; confirm it with
+<code>systemd-analyze calendar '*:0/5'</code> before trusting it.</p>
+<p>A failed oneshot unit shows up in <code>systemctl --failed</code> and in the journal, which
+is enough to catch a service that has been unhealthy for hours.</p>
+<h2 id="avoid-the-check-that-flaps">Avoid the check that flaps</h2>
+<p>Two habits keep a health check from becoming noise. First, require consecutive
+failures before alerting — a single timeout during a deploy is not an incident.
+Second, give the check a timeout shorter than its interval, so a hung check
+cannot overlap with the next run:</p>
+<pre><code class="language-bash"># 5 second cap on a check that runs every 5 minutes
+timeout 5 /usr/local/bin/healthcheck.sh
+</code></pre>
+<p><code>timeout</code> from coreutils returns 124 when it has to kill the command, which is a
+distinct exit code you can alert on separately from a genuine failure.</p>
+<h2 id="test-the-check-by-breaking-the-thing">Test the check by breaking the thing</h2>
+<p>A health check is code, and code that has never failed is code you do not know
+works. Break the dependency deliberately, in a controlled way, and confirm the
+check goes red:</p>
+<pre><code class="language-bash">sudo systemctl stop postgresql
+/usr/local/bin/healthcheck.sh; echo &quot;exit=$?&quot;
+sudo systemctl start postgresql
+/usr/local/bin/healthcheck.sh; echo &quot;exit=$?&quot;
+</code></pre>
+<p>The exit codes should differ. If they do not, the check is not testing what you
+think, and it is worth fixing before it is needed.</p>
+<h2 id="what-to-leave-out">What to leave out</h2>
+<p>A health check should be fast and side-effect free. Avoid checks that write to
+the database, send email, or call a third-party API — those turn a monitoring
+system into a source of load and, worse, of failures. If the check itself can
+break the service, it is not a check.</p>
+</article>
+<section class="related">
+<h2>Related articles</h2>
+<ul class="cards">
+<li><h3><a href="https://kabutoxyz.com/articles/systemd-timer-calendar-expressions/">systemd timer calendar expressions, and the two that catch everyone</a></h3><p>OnCalendar looks like cron but is not cron. Two expression shapes look correct, parse without error, and run at the wrong time. <span class="meta">&middot; 2026-09-18</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/backup-restore-drill/">A backup you have never restored is not a backup</a></h3><p>Most backup failures are found during a restore, which is the worst possible time. A repeatable restore drill turns that into a non-event. <span class="meta">&middot; 2026-09-24</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/systemd-restart-policy-crash-loop/">Crash loops: reading systemd restart policies instead of guessing</a></h3><p>Restart=on-failure and StartLimitBurst decide whether a service recovers or dies. Read them from the running unit, not from the file you think is loaded. <span class="meta">&middot; 2026-10-07</span></p></li>
+</ul>
+</section><div class="ad-slot"><!-- AdSense slot: set ADSENSE_CLIENT in build.py once approved --></div>
+  </div>
+</main>
+<footer class="site">
+  <div class="wrap">
+    <span>&copy; 2026 Ops Journal</span>
+    <span>
+      <a href="https://kabutoxyz.com/about/">About</a> &middot;
+      <a href="https://kabutoxyz.com/privacy/">Privacy</a> &middot;
+      <a href="https://kabutoxyz.com/terms/">Terms</a> &middot;
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </span>
+  </div>
+</footer>
+</body>
+</html>

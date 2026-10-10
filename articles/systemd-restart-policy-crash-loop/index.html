@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crash loops: reading systemd restart policies</title>
+<meta name="description" content="Restart=on-failure and StartLimitBurst decide whether a service recovers or dies. Read them from the running unit, not from the file you think is loaded.">
+<link rel="canonical" href="https://kabutoxyz.com/articles/systemd-restart-policy-crash-loop/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Crash loops: reading systemd restart policies">
+<meta property="og:description" content="Restart=on-failure and StartLimitBurst decide whether a service recovers or dies. Read them from the running unit, not from the file you think is loaded.">
+<meta property="og:url" content="https://kabutoxyz.com/articles/systemd-restart-policy-crash-loop/">
+<meta property="og:site_name" content="Ops Journal">
+<meta name="twitter:card" content="summary">
+<link rel="alternate" type="application/rss+xml" title="Ops Journal" href="https://kabutoxyz.com/feed.xml">
+<style>
+:root{
+  --bg:#fbfaf7; --panel:#ffffff; --ink:#1c1a17; --muted:#6b6459;
+  --line:#e5e0d6; --accent:#1f5f4b; --accent-soft:#eaf3ef;
+  --code-bg:#f4f1ea; --radius:10px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);
+  font-size:17px;line-height:1.65;
+}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-soft)}
+a:hover{border-bottom-color:var(--accent)}
+.wrap{max-width:760px;margin:0 auto;padding:0 20px}
+header.site{border-bottom:1px solid var(--line);background:var(--panel)}
+header.site .wrap{display:flex;align-items:baseline;justify-content:space-between;
+  gap:16px;padding-top:18px;padding-bottom:18px;flex-wrap:wrap}
+.brand{font-weight:700;font-size:1.05rem;letter-spacing:-.01em;border:none}
+.brand span{color:var(--muted);font-weight:400}
+nav.links a{margin-left:18px;font-size:.94rem;border:none;color:var(--muted)}
+nav.links a:hover{color:var(--accent)}
+main{padding:40px 0 64px}
+h1{font-size:1.85rem;line-height:1.25;letter-spacing:-.02em;margin:0 0 .5rem}
+h2{font-size:1.3rem;margin:2.2rem 0 .6rem;letter-spacing:-.01em}
+h3{font-size:1.08rem;margin:1.7rem 0 .4rem}
+p{margin:0 0 1.05rem}
+ul,ol{margin:0 0 1.05rem;padding-left:1.3rem}
+li{margin-bottom:.4rem}
+hr{border:none;border-top:1px solid var(--line);margin:2.4rem 0}
+blockquote{margin:1.4rem 0;padding:.2rem 0 .2rem 1rem;
+  border-left:3px solid var(--accent-soft);color:var(--muted)}
+code{font-family:var(--mono);font-size:.87em;background:var(--code-bg);
+  padding:.12em .38em;border-radius:5px}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px 16px;overflow-x:auto;margin:0 0 1.2rem}
+pre code{background:none;padding:0;font-size:.84rem;line-height:1.55}
+table{width:100%;border-collapse:collapse;margin:0 0 1.2rem;font-size:.94rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font-weight:600;background:var(--panel)}
+.meta{color:var(--muted);font-size:.9rem;margin-bottom:1.8rem}
+.lede{font-size:1.08rem;color:var(--muted);margin-bottom:2rem}
+.cards{list-style:none;padding:0;margin:0}
+.cards li{border-top:1px solid var(--line);padding:18px 0;margin:0}
+.cards li:first-child{border-top:none}
+.cards h3{margin:0 0 .3rem;font-size:1.12rem}
+.cards p{margin:0;color:var(--muted);font-size:.95rem}
+.related{margin-top:3rem;padding-top:1.6rem;border-top:1px solid var(--line)}
+.related h2{margin-top:0}
+.related .cards h3{font-size:1.02rem}
+.ad-slot{margin:2.4rem 0;min-height:1px}
+footer.site{border-top:1px solid var(--line);color:var(--muted);font-size:.88rem;
+  background:var(--panel)}
+footer.site .wrap{padding-top:24px;padding-bottom:28px;display:flex;
+  justify-content:space-between;gap:14px;flex-wrap:wrap}
+footer.site a{color:var(--muted);border:none}
+footer.site a:hover{color:var(--accent)}
+@media(max-width:600px){
+  body{font-size:16px}
+  h1{font-size:1.55rem}
+  nav.links a{margin-left:0;margin-right:16px}
+}
+</style>
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebSite", "@id": "https://kabutoxyz.com/#website", "url": "https://kabutoxyz.com/", "name": "Ops Journal", "description": "Field notes on Linux, backups, containers and monitoring, written by an engineer who runs the systems described here. Commands are run before they are written down."}, {"@type": "Organization", "@id": "https://kabutoxyz.com/#organization", "name": "Ops Journal", "url": "https://kabutoxyz.com/"}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "Article", "headline": "Crash loops: reading systemd restart policies", "description": "Restart=on-failure and StartLimitBurst decide whether a service recovers or dies. Read them from the running unit, not from the file you think is loaded.", "datePublished": "2026-10-07", "dateModified": "2026-10-07", "inLanguage": "en", "url": "https://kabutoxyz.com/articles/systemd-restart-policy-crash-loop/", "mainEntityOfPage": {"@type": "WebPage", "@id": "https://kabutoxyz.com/articles/systemd-restart-policy-crash-loop/"}, "author": {"@type": "Organization", "name": "Ops Journal"}, "publisher": {"@type": "Organization", "name": "Ops Journal", "url": "https://kabutoxyz.com/"}, "keywords": "systemd, linux, debugging"}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://kabutoxyz.com/"}, {"@type": "ListItem", "position": 2, "name": "Articles", "item": "https://kabutoxyz.com/articles/"}, {"@type": "ListItem", "position": 3, "name": "Crash loops: reading systemd restart policies", "item": "https://kabutoxyz.com/articles/systemd-restart-policy-crash-loop/"}]}</script>
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="https://kabutoxyz.com/">Ops Journal <span>&middot; Practical notes on running software in production</span></a>
+    <nav class="links">
+      <a href="https://kabutoxyz.com/">Articles</a>
+      <a href="https://kabutoxyz.com/about/">About</a>
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <div class="wrap">
+<article>
+<h1>Crash loops: reading systemd restart policies instead of guessing</h1>
+<p class="meta">Published 2026-10-07 · 7 min read</p>
+<p>A service that keeps restarting is either recovering badly or failing to start,
+and the difference is in the unit's restart policy. Reading the policy that is
+actually in effect — rather than the one in the file you edited — is the first
+step, and it takes one command.</p>
+<h2 id="read-the-effective-values-not-the-file">Read the effective values, not the file</h2>
+<p>systemd merges unit files from several directories and applies drop-ins. The
+file you are looking at may not be the one being used. Ask systemd instead:</p>
+<pre><code class="language-bash">systemctl show myapp.service -p Restart,RestartUSec,StartLimitBurst,StartLimitIntervalUSec,NRestarts
+</code></pre>
+<p>On this machine, for <code>ssh</code>:</p>
+<pre><code class="language-bash">systemctl show ssh -p Restart,RestartUSec,StartLimitBurst
+</code></pre>
+<pre><code>Restart=on-failure
+RestartUSec=100ms
+StartLimitBurst=5
+</code></pre>
+<p>Each of those matters and each has a default that surprises people.</p>
+<h2 id="what-each-setting-does">What each setting does</h2>
+<p><code>Restart=</code> decides when systemd brings the service back:</p>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Restarts on</th>
+<th>Typical use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>no</code></td>
+<td>never</td>
+<td>one-shot jobs</td>
+</tr>
+<tr>
+<td><code>on-failure</code></td>
+<td>non-zero exit, signal, or timeout</td>
+<td>services that may fail transiently</td>
+</tr>
+<tr>
+<td><code>always</code></td>
+<td>any exit, including clean</td>
+<td>services that should never stop</td>
+</tr>
+<tr>
+<td><code>on-abnormal</code></td>
+<td>signals and timeouts only</td>
+<td>avoid restarting on a clean exit</td>
+</tr>
+</tbody>
+</table>
+<p>The distinction between <code>on-failure</code> and <code>always</code> is the one that matters in a
+crash loop. With <code>on-failure</code>, a service that exits cleanly stays down, which is
+often what you want — it means the service decided it was done. With <code>always</code>, it
+comes back regardless, which turns an intentional exit into an endless loop.</p>
+<p><code>RestartUSec</code> is the delay before restarting. The default is 100ms, and that is
+the reason a broken service can generate hundreds of log lines in a few seconds.
+A crash loop at 100ms looks like a flood; the same loop at <code>RestartSec=10s</code> is
+readable.</p>
+<p><code>StartLimitBurst</code> and <code>StartLimitIntervalUSec</code> together define the rate limit:
+if the service restarts more than <code>StartLimitBurst</code> times within the interval,
+systemd gives up and puts the unit in a failed state. The default burst is 5
+within 10 seconds.</p>
+<h2 id="why-the-service-eventually-stops-trying">Why the service eventually stops trying</h2>
+<p>This is the behaviour people misread as "systemd gave up for no reason". Once
+the burst limit is hit, the unit enters <code>failed</code> and systemd stops restarting it
+— deliberately, so a broken service cannot spin forever consuming resources and
+filling logs.</p>
+<p>Check whether that has happened:</p>
+<pre><code class="language-bash">systemctl status myapp.service --no-pager | head -20
+systemctl is-failed myapp.service
+</code></pre>
+<p>The status output includes a line naming the limit that was hit, which tells you
+it is a crash loop rather than a one-off failure.</p>
+<p>To reset the counter and allow restarts again, after fixing the underlying
+problem:</p>
+<pre><code class="language-bash">sudo systemctl reset-failed myapp.service
+sudo systemctl start myapp.service
+</code></pre>
+<p>Resetting without fixing the cause simply restarts the loop.</p>
+<h2 id="reading-the-loop-to-find-the-cause">Reading the loop to find the cause</h2>
+<p>The journal holds every attempt with its exit code, and the sequence is more
+informative than any single entry:</p>
+<pre><code class="language-bash">journalctl -u myapp.service -n 50 --no-pager
+</code></pre>
+<p>Look at the exit status on each attempt. Three patterns:</p>
+<ul>
+<li><strong>Same non-zero code every time</strong> — a deterministic startup failure. Config
+  error, missing file, bad credentials. The code names the class.</li>
+<li><strong>Signal (for example <code>status=11/SEGV</code>)</strong> — the process is crashing. Code
+  problem or corrupt input.</li>
+<li><strong><code>status=1/FAILURE</code> after a successful start</strong> — the service starts, then
+  exits. Often a foreground/background mismatch: the unit expects the process to
+  stay in the foreground and it is daemonising instead.</li>
+</ul>
+<p>That third case is common and worth recognising, because the logs show a
+successful startup immediately followed by a restart, which looks like a crash
+but is not.</p>
+<h2 id="the-foregroundbackground-trap">The foreground/background trap</h2>
+<p>systemd expects the process it starts to remain in the foreground. A program
+that forks and returns — the classic daemon pattern — makes systemd think the
+service exited immediately, and with <code>Restart=always</code> it restarts forever.</p>
+<p>The fix is in the service, not the unit, in most cases: run it in the foreground
+with the flag the program provides for it. Where that is not possible, <code>Type=</code>
+can be set to match the behaviour, but foreground is the correct answer and the
+others are workarounds.</p>
+<h2 id="a-policy-that-degrades-gracefully">A policy that degrades gracefully</h2>
+<p>For a service where a slow restart is acceptable, this combination keeps a crash
+loop from becoming a flood while still recovering from transient failures:</p>
+<pre><code class="language-ini">[Service]
+Restart=on-failure
+RestartSec=5
+# give up after 5 failures in 5 minutes
+StartLimitBurst=5
+StartLimitIntervalSec=300
+</code></pre>
+<p>The longer interval is the important change from the default. Five failures in
+ten seconds is a hair trigger; five in five minutes distinguishes a genuinely
+broken service from one that tripped once.</p>
+<p>Note that <code>StartLimitIntervalSec</code> belongs in the <code>[Unit]</code> section on current
+systemd, not <code>[Service]</code>. Placing it in the wrong section means it is silently
+ignored, and the default applies — which is why the effective-value check at the
+top of this article matters.</p>
+<h2 id="confirm-the-change-took-effect">Confirm the change took effect</h2>
+<p>After editing, reload and verify the values systemd is using, not the values in
+the file:</p>
+<pre><code class="language-bash">sudo systemctl daemon-reload
+systemctl show myapp.service -p Restart,RestartUSec,StartLimitBurst
+</code></pre>
+<p>Then trigger a failure deliberately and watch one cycle, rather than waiting for
+a real one:</p>
+<pre><code class="language-bash">sudo systemctl restart myapp.service
+journalctl -u myapp.service -f
+</code></pre>
+<p>Seeing a single clean restart attempt with the delay you configured is the proof
+that the policy is live.</p>
+</article>
+<section class="related">
+<h2>Related articles</h2>
+<ul class="cards">
+<li><h3><a href="https://kabutoxyz.com/articles/systemd-timer-calendar-expressions/">systemd timer calendar expressions, and the two that catch everyone</a></h3><p>OnCalendar looks like cron but is not cron. Two expression shapes look correct, parse without error, and run at the wrong time. <span class="meta">&middot; 2026-09-18</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/file-descriptor-leak/">Too many open files: finding a file descriptor leak before it takes the service down</a></h3><p>EMFILE arrives long before the crash. Reading the per-process limits and counting open descriptors shows which service is leaking and how fast. <span class="meta">&middot; 2026-10-07</span></p></li>
+<li><h3><a href="https://kabutoxyz.com/articles/var-log-disk-growth/">When /var/log eats the disk: finding what actually grew</a></h3><p>A full root filesystem is usually logs, not data. Here is how to find the real culprit in three commands and cap it so it stays capped. <span class="meta">&middot; 2026-09-12</span></p></li>
+</ul>
+</section><div class="ad-slot"><!-- AdSense slot: set ADSENSE_CLIENT in build.py once approved --></div>
+  </div>
+</main>
+<footer class="site">
+  <div class="wrap">
+    <span>&copy; 2026 Ops Journal</span>
+    <span>
+      <a href="https://kabutoxyz.com/about/">About</a> &middot;
+      <a href="https://kabutoxyz.com/privacy/">Privacy</a> &middot;
+      <a href="https://kabutoxyz.com/terms/">Terms</a> &middot;
+      <a href="https://kabutoxyz.com/contact/">Contact</a>
+    </span>
+  </div>
+</footer>
+</body>
+</html>

@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Ops Journal</title>
+    <link>https://kabutoxyz.com/</link>
+    <description>Field notes on Linux, backups, containers and monitoring, written by an engineer who runs the systems described here. Commands are run before they are written down.</description>
+    <language>en</language>
+    <item>
+      <title>Too many open files: finding a file descriptor leak before it takes the service down</title>
+      <link>https://kabutoxyz.com/articles/file-descriptor-leak/</link>
+      <guid isPermaLink="true">https://kabutoxyz.com/articles/file-descriptor-leak/</guid>
+      <pubDate>2026-10-07T09:00:00+00:00</pubDate>
+      <description>EMFILE arrives long before the crash. Reading the per-process limits and counting open descriptors shows which service is leaking and how fast.</description>
+    </item>
+    <item>
+      <title>SSH host keys: what that SHA256 fingerprint actually identifies</title>
+      <link>https://kabutoxyz.com/articles/ssh-host-key-fingerprints/</link>
+      <guid isPermaLink="true">https://kabutoxyz.com/articles/ssh-host-key-fingerprints/</guid>
+      <pubDate>2026-10-07T09:00:00+00:00</pubDate>
+      <description>The fingerprint prompt is the one moment SSH authentication can be attacked. Knowing what is being compared turns it from a nuisance into a check.</description>
+    </item>
+    <item>
+      <title>Crash loops: reading systemd restart policies instead of guessing</title>
+      <link>https://kabutoxyz.com/articles/systemd-restart-policy-crash-loop/</link>
+      <guid isPermaLink="true">https://kabutoxyz.com/articles/systemd-restart-policy-crash-loop/</guid>
+      <pubDate>2026-10-07T09:00:00+00:00</pubDate>
+      <description>Restart=on-failure and StartLimitBurst decide whether a service recovers or dies. Read them from the running unit, not from the file you think is loaded.</description>
+    </item>
+    <item>
+      <title>rsync for backups: the flags that matter and the ones that quietly change what is copied</title>
+      <link>https://kabutoxyz.com/articles/rsync-backup-flags/</link>
+      <guid isPermaLink="true">https://kabutoxyz.com/articles/rsync-backup-flags/</guid>
+      <pubDate>2026-10-07T09:00:00+00:00</pubDate>
+      <description>A trailing slash changes the entire result, and --delete makes a wrong path destructive. Test with --dry-run until the output matches intent.</description>
+    </item>
+    <item>
+      <title>Reading a disk-full incident in the right order</title>
+      <link>https://kabutoxyz.com/articles/disk-full-incident-order/</link>
+      <guid isPermaLink="true">https://kabutoxyz.com/articles/disk-full-incident-order/</guid>
+      <pubDate>2026-10-06T09:00:00+00:00</pubDate>
+      <description>Space is used, not created. Work from df to du to inodes to open files and the cause is found in minutes instead of an hour.</description>
+    </item>
+    <item>
+      <title>Testing whether a remote port is reachable, and what each failure means</title>
+      <link>https://kabutoxyz.com/articles/test-remote-port-reachability/</link>
+      <guid isPermaLink="true">https://kabutoxyz.com/articles/test-remote-port-reachability/</guid>
+      <pubDate>2026-10-06T09:00:00+00:00</pubDate>
+      <description>Connection refused, timed out and no route are three different problems. Tell them apart and the fault is localised in one command.</description>
+    </item>
+    <item>
+      <title>Finding which process is holding a port, and why kill does not always free it</title>
+      <link>https://kabutoxyz.com/articles/find-process-holding-port/</link>
+      <guid isPermaLink="true">https://kabutoxyz.com/articles/find-process-holding-port/</guid>
+      <pubDate>2026-10-05T09:00:00+00:00</pubDate>
+      <description>Address already in use is a symptom, not a diagnosis. Here is how to find the real owner of a port and why it sometimes refuses to release.</description>
+    </item>
+    <item>
+      <title>A health check that does not lie: checking the thing that can actually fail</title>
+      <link>https://kabutoxyz.com/articles/honest-health-checks/</link>
+      <guid isPermaLink="true">https://kabutoxyz.com/articles/honest-health-checks/</guid>
+      <pubDate>2026-10-03T09:00:00+00:00</pubDate>
+      <description>A check that returns 200 while the database is unreachable is worse than no check. Here is how to test the dependency, not the process.</description>
+    </item>
+    <item>
+      <title>What actually survives a container rebuild: volumes, mounts and the data people lose</title>
+      <link>https://kabutoxyz.com/articles/container-volumes-data-survival/</link>
+      <guid isPermaLink="true">https://kabutoxyz.com/articles/container-volumes-data-survival/</guid>
+      <pubDate>2026-09-29T09:00:00+00:00</pubDate>
+      <description>Rebuilding a container is routine until it takes the data with it. Here is which storage survives, which does not, and how to check first.</description>
+    </item>
+    <item>
+      <title>A backup you have never restored is not a backup</title>
+      <link>https://kabutoxyz.com/articles/backup-restore-drill/</link>
+      <guid isPermaLink="true">https://kabutoxyz.com/articles/backup-restore-drill/</guid>
+      <pubDate>2026-09-24T09:00:00+00:00</pubDate>
+      <description>Most backup failures are found during a restore, which is the worst possible time. A repeatable restore drill turns that into a non-event.</description>
+    </item>
+    <item>
+      <title>systemd timer calendar expressions, and the two that catch everyone</title>
+      <link>https://kabutoxyz.com/articles/systemd-timer-calendar-expressions/</link>
+      <guid isPermaLink="true">https://kabutoxyz.com/articles/systemd-timer-calendar-expressions/</guid>
+      <pubDate>2026-09-18T09:00:00+00:00</pubDate>
+      <description>OnCalendar looks like cron but is not cron. Two expression shapes look correct, parse without error, and run at the wrong time.</description>
+    </item>
+    <item>
+      <title>When /var/log eats the disk: finding what actually grew</title>
+      <link>https://kabutoxyz.com/articles/var-log-disk-growth/</link>
+      <guid isPermaLink="true">https://kabutoxyz.com/articles/var-log-disk-growth/</guid>
+      <pubDate>2026-09-12T09:00:00+00:00</pubDate>
+      <description>A full root filesystem is usually logs, not data. Here is how to find the real culprit in three commands and cap it so it stays capped.</description>
+    </item>
+  </channel>
+</rss>
